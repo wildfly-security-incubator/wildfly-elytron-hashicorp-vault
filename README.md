@@ -1,1 +1,1 @@
-# wildfly-elytron-hashicorp-integration
+# wildfly-elytron-hashicorp
