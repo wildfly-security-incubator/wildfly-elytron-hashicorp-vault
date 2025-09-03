@@ -56,4 +56,23 @@ public class VaultConectorTestCase {
         vaultService.configure();
         assertEquals("password123", vaultService.getSecret("secret/testing1", "top_secret"));
     }
+
+//    @Test
+//    public void testRemove() throws Exception {
+//        // setup test container with vault
+//        vaultTestContainer = new VaultContainer<>("hashicorp/vault:1.13")
+//                .withVaultToken("myroot")
+//                .withInitCommand(
+//                        "secrets enable transit",
+//                        "write -f transit/keys/my-key",
+//                        "kv put secret/testing1 top_secret=password123",
+//                        "kv put secret/testing2 dbuser=secretpass jmsuser=jmspass"
+//                );
+//        vaultTestContainer.start();
+//
+//        // Test vault service
+//        VaultConnector vaultService = new VaultConnector(vaultTestContainer.getHttpHostAddress(), "incorrect", "/v1/secret/data/testing2", new SslConfig().verify(false), false);
+//        vaultService.configure();
+//        vaultService.removeSecret("secret/testing1", "top_secret");
+//    }
 }

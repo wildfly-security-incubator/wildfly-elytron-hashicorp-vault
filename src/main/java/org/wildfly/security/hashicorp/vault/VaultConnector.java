@@ -98,4 +98,27 @@ public class VaultConnector {
 
         throw new VaultException("Secret not found: " + path + "/" + key);
     }
+
+//    /**
+//     * Retrieve a secret from Vault
+//     */
+//    public void removeSecret(String path, String key) throws VaultException {
+//        String cacheKey = path + ":" + key;
+//
+//        // Check cache first
+//        Object cachedValue = this.secretCache.get(cacheKey);
+//        if (cachedValue != null) {
+//            this.secretCache.remove(cacheKey);
+//        }
+//
+//        // Fetch from Vault
+//        LogicalResponse response = this.vault.logical().delete(path);
+//        int responseStatus = response.getRestResponse().getStatus();
+//        if (responseStatus == 200) {
+//            logger.tracef("Vault deleted secret successfully, url: %s", this.vaultUrl);
+//            return;
+//        }
+//
+//        throw new VaultException("Secret not found: " + path + "/" + key);
+//    }
 }
