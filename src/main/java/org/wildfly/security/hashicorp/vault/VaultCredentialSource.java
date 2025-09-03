@@ -39,6 +39,16 @@ public class VaultCredentialSource implements CredentialSource {
      * @param secretKey the key of the secret
      */
     public VaultCredentialSource(VaultConnector vaultConnector, String secretPath, String secretKey) {
+        if (vaultConnector == null) {
+            throw new IllegalArgumentException("VaultConnector cannot be null");
+        }
+        if (secretPath == null || secretPath.trim().isEmpty()) {
+            throw new IllegalArgumentException("Secret path cannot be null or empty");
+        }
+        if (secretKey == null || secretKey.trim().isEmpty()) {
+            throw new IllegalArgumentException("Secret key cannot be null or empty");
+        }
+        
         this.vaultConnector = vaultConnector;
         this.secretPath = secretPath;
         this.secretKey = secretKey;
@@ -48,14 +58,12 @@ public class VaultCredentialSource implements CredentialSource {
     public boolean isCredentialSupported(Class<? extends Credential> credentialType, String algorithm,
                                          AlgorithmParameterSpec parameterSpec) throws IOException {
         return credentialType == PasswordCredential.class &&
-                (algorithm == null || ClearPassword.ALGORITHM_CLEAR.equals(algorithm))
-                ? true : false;
+                (algorithm == null || ClearPassword.ALGORITHM_CLEAR.equals(algorithm));
     }
 
     @Override
     public <C extends Credential> C getCredential(Class<C> credentialType, String algorithm,
                                                   AlgorithmParameterSpec parameterSpec) throws IOException {
-
         //TODO support more credential types
         if (credentialType == PasswordCredential.class) {
             try {
@@ -68,7 +76,7 @@ public class VaultCredentialSource implements CredentialSource {
                     return credentialType.cast(new PasswordCredential(clearPassword));
                 }
             } catch (Exception e) {
-                throw new IOException("Failed to retrieve credential from Vault", e);
+                throw new IOException("Failed to retrieve credential from Vault: " + e.getMessage(), e);
             }
         }
 
@@ -78,7 +86,9 @@ public class VaultCredentialSource implements CredentialSource {
     @Override
     public SupportLevel getCredentialAcquireSupport(Class<? extends Credential> credentialType, String algorithmName,
                                                     AlgorithmParameterSpec parameterSpec) throws IOException {
-        // TODO Auto-generated method stub
-        throw new UnsupportedOperationException("Unimplemented method 'getCredentialAcquireSupport'");
+        if (isCredentialSupported(credentialType, algorithmName, parameterSpec)) {
+            return SupportLevel.SUPPORTED;
+        }
+        return SupportLevel.UNSUPPORTED;
     }
 }
