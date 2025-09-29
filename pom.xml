@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright The WildFly Authors
+  ~ SPDX-License-Identifier: Apache-2.0
+  -->
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
@@ -8,8 +12,8 @@
     <artifactId>wildfly-elytron-hashicorp-vault</artifactId>
     <version>1.0-SNAPSHOT</version>
 
-    <name>wildfly-elytron-hashicorp-vault</name>
-    <description>TODO</description>
+    <name>WildFly Elytron HashiCorp Vault Integration</name>
+    <description>An integration library that provides WildFly Elytron credential store backed by HashiCorp Vault.</description>
 
     <packaging>jar</packaging>
     <properties>
