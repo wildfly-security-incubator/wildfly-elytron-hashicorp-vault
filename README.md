@@ -1,6 +1,6 @@
 # WildFly HashiCorp Vault Credential Store
 
-A custom credential store implementation for WildFly that integrates with HashiCorp Vault for secure credential storage and retrieval.
+A credential store implementation for WildFly that integrates with HashiCorp Vault for secure credential storage and retrieval.
 
 ## Requirements
 
@@ -17,6 +17,10 @@ git clone <repository-url>
 cd wildfly-elytron-hashicorp-vault
 mvn clean install
 ```
+# Important
+
+Adding a credentials store to the Elyton subsystem is only a preview. Using it this way is not recommended. We are currently developing a dedicated feature pack with a vault subsystem that will offer more configuration options.
+
 
 ## Configuration
 
