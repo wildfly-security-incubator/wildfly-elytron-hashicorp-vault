@@ -16,7 +16,7 @@
 
     <groupId>org.wildfly.security.hashicorp.vault</groupId>
     <artifactId>wildfly-elytron-hashicorp-vault</artifactId>
-    <version>0.1.0-Alpha</version>
+    <version>0.1.0-Alpha-SNAPSHOT</version>
 
     <name>WildFly Elytron HashiCorp Vault Integration</name>
     <description>An integration library that provides WildFly Elytron credential store backed by HashiCorp Vault.</description>
@@ -137,4 +137,19 @@
             </plugins>
         </pluginManagement>
     </build>
+    
+    <repositories>
+        <repository>
+            <id>public-jboss</id>
+            <name>Public JBoss Repository Group</name>
+            <url>https://repository.jboss.org/nexus/content/groups/public-jboss/</url>
+        </repository>
+    </repositories>
+    <pluginRepositories>
+        <pluginRepository>
+            <id>public-jboss-plugins</id>
+            <name>Public JBoss Repository Group</name>
+            <url>https://repository.jboss.org/nexus/content/groups/public-jboss/</url>
+        </pluginRepository>
+    </pluginRepositories>
 </project>
