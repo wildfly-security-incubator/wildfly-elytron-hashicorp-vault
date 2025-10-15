@@ -36,6 +36,15 @@
         <nexus.repository.release>wildfly-security-incubator</nexus.repository.release>
     </properties>
 
+    <developers>
+        <developer>
+            <name>Diana Krepinska</name>
+            <email>diavilko@gmail.com</email>
+            <organization>WildFly</organization>
+            <organizationUrl>https://www.wildfly.org/</organizationUrl>
+        </developer>
+    </developers>
+
     <scm>
         <connection>scm:git:git@github.com:wildfly-security-incubator/wildfly-elytron-hashicorp-vault.git</connection>
         <developerConnection>scm:git:git@github.com:wildfly-security-incubator/wildfly-elytron-hashicorp-vault</developerConnection>
