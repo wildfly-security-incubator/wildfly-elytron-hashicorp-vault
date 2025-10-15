@@ -16,7 +16,7 @@
 
     <groupId>org.wildfly.security.hashicorp.vault</groupId>
     <artifactId>wildfly-elytron-hashicorp-vault</artifactId>
-    <version>0.0.1-Alpha</version>
+    <version>0.1.0-Alpha</version>
 
     <name>WildFly Elytron HashiCorp Vault Integration</name>
     <description>An integration library that provides WildFly Elytron credential store backed by HashiCorp Vault.</description>
@@ -126,11 +126,12 @@
                     <artifactId>maven-release-plugin</artifactId>
                     <configuration>
                         <!-- Prepare -->
-                        <autoVersionSubmodules>true</autoVersionSubmodules>
-                        <tagNameFormat>@{project.version}</tagNameFormat>
                         <pushChanges>false</pushChanges>
+                        <preparationProfiles>jboss-release</preparationProfiles>
+                        <arguments>-DskipTests</arguments>
                         <!-- Perform -->
                         <localCheckout>true</localCheckout>
+                        <releaseProfiles>jboss-release</releaseProfiles>
                     </configuration>
                 </plugin>
             </plugins>
