@@ -11,6 +11,7 @@ import io.github.jopenlibs.vault.SslConfig;
 import io.github.jopenlibs.vault.Vault;
 import io.github.jopenlibs.vault.VaultConfig;
 import io.github.jopenlibs.vault.VaultException;
+import io.github.jopenlibs.vault.response.AuthResponse;
 import io.github.jopenlibs.vault.response.LogicalResponse;
 import org.jboss.logging.Logger;
 
@@ -47,12 +48,20 @@ public class VaultConnector {
 
             this.vault = Vault.create(config);
 
-            // Test connection to validate configuration
+            if (token == null || token.trim().isEmpty()) {
+                logger.debug("Token is null or empty, using cert auth method");
+                final AuthResponse authResponse = this.vault.auth().loginByCert();
+                //use received token for further authentication
+                config.token(authResponse.getAuthClientToken());
+                //new instance will use set token
+                this.vault = Vault.create(config);
+            }
+
             this.vault.auth().lookupSelf();
             logger.debugf("Vault configuration successful for URL: %s", this.vaultUrl);
         } catch (VaultException e) {
             logger.errorf("Failed to configure Vault connection to %s: %s", this.vaultUrl, e.getMessage());
-            throw new VaultException("Failed to configure Vault connection: " + e.getMessage());
+            throw e;
         }
     }
 
