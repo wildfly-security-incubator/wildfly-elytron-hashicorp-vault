@@ -5,20 +5,23 @@
 package org.wildfly.security.hashicorp.vault;
 
 import io.github.jopenlibs.vault.SslConfig;
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 import org.testcontainers.vault.VaultContainer;
 import org.wildfly.security.credential.PasswordCredential;
 import org.wildfly.security.password.interfaces.ClearPassword;
 
 import java.io.IOException;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
 public class VaultCredentialSourceTestCase {
 
     VaultContainer<?> vaultTestContainer;
 
-    @After
+    @AfterEach
     public void cleanup() {
         if (vaultTestContainer != null) {
             vaultTestContainer.stop();
@@ -36,7 +39,7 @@ public class VaultCredentialSourceTestCase {
         // Test credential source with vault service
         VaultCredentialSource credentialSource = new VaultCredentialSource(vaultService, "secret/testing1", "top_secret");
         PasswordCredential credential = credentialSource.getCredential(PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR, null);
-        Assert.assertEquals("password123", String.valueOf(credential.getPassword(ClearPassword.class).getPassword()));
+        assertEquals("password123", String.valueOf(credential.getPassword(ClearPassword.class).getPassword()));
     }
 
     @Test
@@ -50,10 +53,10 @@ public class VaultCredentialSourceTestCase {
         // Test credential source with vault service
         VaultCredentialSource credentialSource = new VaultCredentialSource(vaultService, "secret/testing1", "incorrect");
         PasswordCredential credential = credentialSource.getCredential(PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR, null);
-        Assert.assertNull(credential);
+        assertNull(credential);
     }
 
-    @Test(expected = IOException.class)
+    @Test
     public void testGetSecretFromVaultServiceFailsWithIncorrectToken() throws Exception {
         // setup and start test container with vault
         vaultTestContainer = VaultTestUtils.startVaultTestContainer();
@@ -62,6 +65,6 @@ public class VaultCredentialSourceTestCase {
 
         // Test credential source with vault service
         VaultCredentialSource credentialSource = new VaultCredentialSource(vaultConnector, "secret/testing1", "incorrect");
-        credentialSource.getCredential(PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR, null);
+        assertThrows(IOException.class, () ->  credentialSource.getCredential(PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR, null));
     }
 }
