@@ -33,7 +33,7 @@
         <!-- Nexus Settings -->
         <nexus.repository.staging>wildfly-staging</nexus.repository.staging>
         <nexus.staging.tag>wildfly-elytron-hashicorp-vault-${project.version}</nexus.staging.tag>
-        <nexus.repository.release>wildfly-security-incubator</nexus.repository.release>
+        <nexus.repository.release>wildfly-security</nexus.repository.release>
     </properties>
 
     <developers>
@@ -151,14 +151,14 @@
         <repository>
             <id>public-jboss</id>
             <name>Public JBoss Repository Group</name>
-            <url>https://repository.jboss.org/nexus/content/groups/public-jboss/</url>
+            <url>https://repository.jboss.org/nexus/repository/public-jboss/</url>
         </repository>
     </repositories>
     <pluginRepositories>
         <pluginRepository>
             <id>public-jboss-plugins</id>
             <name>Public JBoss Repository Group</name>
-            <url>https://repository.jboss.org/nexus/content/groups/public-jboss/</url>
+            <url>https://repository.jboss.org/nexus/repository/public-jboss/</url>
         </pluginRepository>
     </pluginRepositories>
 </project>
