@@ -6,11 +6,14 @@ package org.wildfly.security.hashicorp.vault;
 
 import io.github.jopenlibs.vault.SslConfig;
 import io.github.jopenlibs.vault.VaultException;
-import org.junit.After;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
+import java.io.IOException;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Dedicated tests for Vault listening on HTTPS interface
@@ -19,14 +22,14 @@ public class VaultConnectorHttpsTestCase {
 
     VaultContainerHttps<?> vaultTestContainer;
 
-    @After
+    @AfterEach
     public void cleanup() {
         if (vaultTestContainer != null) {
             vaultTestContainer.stop();
         }
     }
 
-    private void startVaultTestContainer() {
+    private void startVaultTestContainer() throws IOException {
         vaultTestContainer = new VaultContainerHttps<>("hashicorp/vault:1.13")
                 .withVaultToken("myroot")
                 .withInitCommand(
@@ -84,7 +87,7 @@ public class VaultConnectorHttpsTestCase {
 
     }
 
-    @Test(expected = VaultException.class)
+    @Test
     public void testIncorrectVaultToken() throws Exception {
         // setup test container with vault
         vaultTestContainer = new VaultContainerHttps<>("hashicorp/vault:1.13")
@@ -99,7 +102,8 @@ public class VaultConnectorHttpsTestCase {
 
         // Test vault service with incorrect token - this should throw VaultException during configure()
         VaultConnector vaultService = new VaultConnector(vaultTestContainer.composeHttpsHostAddress(), "incorrect-token", "admin", new SslConfig().verify(true), true);
-        vaultService.configure(); // This should throw VaultException due to authentication failure
+        assertThrows(VaultException.class, vaultService::configure,
+                "VaultException should be thrown due to authentication failure");
     }
 
     @Test
