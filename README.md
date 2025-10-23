@@ -19,7 +19,7 @@ mvn clean install
 ```
 # Important
 
-Adding a credentials store to the Elyton subsystem is only a preview. Using it this way is not recommended. We are currently developing a dedicated feature pack with a vault subsystem that will offer more configuration options.
+Adding a credential store to the Elytron subsystem is only a preview of what we are working on. Using it this way is not recommended. We are currently developing a dedicated feature pack with a vault subsystem that will offer more configuration options.
 
 
 ## Configuration
