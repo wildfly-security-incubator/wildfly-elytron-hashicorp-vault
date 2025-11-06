@@ -14,7 +14,7 @@
 
     <groupId>org.wildfly.security.hashicorp.vault</groupId>
     <artifactId>wildfly-elytron-hashicorp-vault</artifactId>
-    <version>0.1.1-Alpha</version>
+    <version>0.1.2-Alpha-SNAPSHOT</version>
 
     <name>WildFly Elytron HashiCorp Vault Integration</name>
     <description>An integration library that provides WildFly Elytron credential store backed by HashiCorp Vault.</description>
@@ -47,7 +47,7 @@
         <connection>scm:git:git@github.com:wildfly-security-incubator/wildfly-elytron-hashicorp-vault.git</connection>
         <developerConnection>scm:git:git@github.com:wildfly-security-incubator/wildfly-elytron-hashicorp-vault</developerConnection>
         <url>https://github.com/wildfly-security-incubator/wildfly-elytron-hashicorp-vault</url>
-      <tag>0.1.1-Alpha</tag>
+      <tag>HEAD</tag>
   </scm>
 
     <dependencies>
