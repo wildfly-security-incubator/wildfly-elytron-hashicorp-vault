@@ -6,6 +6,12 @@ package org.wildfly.security.hashicorp.vault;
 
 import org.testcontainers.vault.VaultContainer;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Comparator;
+import java.util.stream.Stream;
+
 public class VaultTestUtils {
 
     /**
@@ -22,5 +28,27 @@ public class VaultTestUtils {
                 );
         vaultTestContainer.start();
         return vaultTestContainer;
+    }
+
+    /**
+     * Remove directory and its content
+     * @param dir directory to cleanup
+     */
+    public static void cleanupDir(final Path dir) {
+        if (!Files.exists(dir)) return;
+
+        try (Stream<Path> paths = Files.walk(dir)) {
+            // Delete in reverse order (children first, then parent)
+            paths.sorted(Comparator.reverseOrder())
+                    .forEach(path -> {
+                        try {
+                            Files.delete(path);
+                        } catch (IOException e) {
+                            throw new RuntimeException("Failed to delete " + path, e);
+                        }
+                    });
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to walk directory " + dir, e);
+        }
     }
 }

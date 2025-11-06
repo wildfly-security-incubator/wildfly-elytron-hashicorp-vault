@@ -4,9 +4,8 @@
  */
 package org.wildfly.security.hashicorp.vault;
 
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 import org.testcontainers.vault.VaultContainer;
 import org.wildfly.security.auth.server.IdentityCredentials;
 import org.wildfly.security.credential.PasswordCredential;
@@ -23,13 +22,14 @@ import java.security.spec.InvalidKeySpecException;
 import java.util.HashMap;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.wildfly.security.hashicorp.vault.VaultTestUtils.startVaultTestContainer;
 
 public class HashicorpVaultCredentialStoreTestCase {
 
     private VaultContainer<?> vaultTestContainer;
 
-    @After
+    @AfterEach
     public void cleanup() {
         if (vaultTestContainer != null) {
             vaultTestContainer.stop();
@@ -48,7 +48,7 @@ public class HashicorpVaultCredentialStoreTestCase {
         cs.initialize(attributes, new CredentialStore.CredentialSourceProtectionParameter(
                 IdentityCredentials.NONE.withCredential(createCredentialFromPassword("myroot"))), new Provider[]{WildFlyElytronPasswordProvider.getInstance()});
         PasswordCredential credential = cs.retrieve("secret/testing1.top_secret", PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR, null, null);
-        Assert.assertEquals("password123", String.valueOf(credential.getPassword(ClearPassword.class).getPassword()));
+        assertEquals("password123", String.valueOf(credential.getPassword(ClearPassword.class).getPassword()));
     }
 
     @Test
@@ -67,7 +67,7 @@ public class HashicorpVaultCredentialStoreTestCase {
                 .retrieve("secret/testing1.test_secret", PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR, null,
                         new CredentialStore.CredentialSourceProtectionParameter(
                 IdentityCredentials.NONE.withCredential(createCredentialFromPassword("myroot"))));
-        Assert.assertEquals("testPassword", String.valueOf(credential.getPassword(ClearPassword.class).getPassword()));
+        assertEquals("testPassword", String.valueOf(credential.getPassword(ClearPassword.class).getPassword()));
     }
 
     private PasswordCredential createCredentialFromPassword(String password) throws UnsupportedCredentialTypeException {
