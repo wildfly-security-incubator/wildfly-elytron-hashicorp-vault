@@ -51,6 +51,9 @@ public class VaultConnector {
             if (token == null || token.trim().isEmpty()) {
                 logger.debug("Token is null or empty, using cert auth method");
                 final AuthResponse authResponse = this.vault.auth().loginByCert();
+                if (authResponse == null) {
+                    throw new VaultException("Authentication using client certificates failed! Token was not provided.");
+                }
                 //use received token for further authentication
                 config.token(authResponse.getAuthClientToken());
                 //new instance will use set token
