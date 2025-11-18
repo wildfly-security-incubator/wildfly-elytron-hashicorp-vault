@@ -31,11 +31,21 @@ public class VaultConnector {
     private final SslConfig sslConfig;
     private Vault vault;
 
+    private JwtConfig jwtConfig;
+
     public VaultConnector(String vaultUrl, String token, String namespace, SslConfig sslConfig, boolean sslVerify) {
         this.vaultUrl = vaultUrl;
         this.token = token;
         this.namespace = namespace;
         this.sslConfig = sslConfig;
+    }
+
+    public VaultConnector(String vaultUrl, JwtConfig jwtConfig, String namespace, SslConfig sslConfig) {
+        this.vaultUrl = vaultUrl;
+        this.token = "";
+        this.namespace = namespace;
+        this.sslConfig = sslConfig;
+        this.jwtConfig = jwtConfig;
     }
 
     public void configure() throws VaultException {
@@ -51,16 +61,35 @@ public class VaultConnector {
 
             this.vault = Vault.create(config);
 
-            if (token == null || token.trim().isEmpty()) {
-                logger.debug("Token is null or empty, using cert auth method");
-                final AuthResponse authResponse = this.vault.auth().loginByCert();
-                if (authResponse == null) {
-                    throw new VaultException("Authentication using client certificates failed! Token was not provided.");
+            AuthResponse authResponse = null;
+
+            try {
+                authResponse = this.vault.auth().loginByCert();
+                logger.debug("Logged in using client certificate");
+            } catch (VaultException e) {
+                logger.debugf(e, "Vault authentication with client certificate failed");
+            }
+
+            if (authResponse == null && this.jwtConfig != null) {
+                try {
+                    authResponse = this.vault.auth().loginByJwt(
+                            this.jwtConfig.getJwtProvider(),
+                            this.jwtConfig.getJwtRole(),
+                            this.jwtConfig.getJwt());
+                    logger.debug("Logged in using JWT");
+                } catch (VaultException e) {
+                    logger.debugf(e, "Vault authentication with JWT failed");
                 }
+            }
+
+            //a non-token login happened
+            if (authResponse != null) {
                 //use received token for further authentication
                 config.token(authResponse.getAuthClientToken());
                 //new instance will use set token
                 this.vault = Vault.create(config);
+            } else {
+                logger.debug("Logging in using Vault token");
             }
 
             this.vault.auth().lookupSelf();
