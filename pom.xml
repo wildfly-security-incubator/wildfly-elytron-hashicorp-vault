@@ -136,6 +136,9 @@
                     <artifactId>maven-surefire-plugin</artifactId>
                     <version>3.5.3</version>
                     <configuration>
+                        <environmentVariables>
+                            <api.version>1.44</api.version>
+                        </environmentVariables>
                         <includes>
                             <include>**/*TestCase.java</include>
                         </includes>
