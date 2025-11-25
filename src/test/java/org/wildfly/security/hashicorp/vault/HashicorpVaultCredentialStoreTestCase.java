@@ -23,6 +23,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.wildfly.security.hashicorp.vault.VaultTestUtils.startVaultTestContainer;
 
 public class HashicorpVaultCredentialStoreTestCase {
@@ -70,6 +72,46 @@ public class HashicorpVaultCredentialStoreTestCase {
         assertEquals("testPassword", String.valueOf(credential.getPassword(ClearPassword.class).getPassword()));
     }
 
+    @Test
+    public void testPutMaintainsExistingKeys() throws Exception {
+        vaultTestContainer = startVaultTestContainer();
+        HashicorpVaultCredentialStore store = createHashicorpVaultCredentialStore();
+        store.store("secret/myapp.mp", createCredentialFromPassword("password1"), null);
+        store.store("secret/myapp.mp2", createCredentialFromPassword("password2"), null);
+        PasswordCredential credential1 = store.retrieve("secret/myapp.mp", PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR,
+                null, createProtectionParameter("myroot"));
+        assertNotNull(credential1);
+        PasswordCredential credential2 = store.retrieve("secret/myapp.mp2", PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR,
+                null, createProtectionParameter("myroot"));
+        assertNotNull(credential2);
+    }
+
+    @Test
+    public void testRemoveKeepsOtherKeys() throws Exception {
+        vaultTestContainer = startVaultTestContainer();
+        HashicorpVaultCredentialStore store = createHashicorpVaultCredentialStore();
+        store.store("secret/myapp.mp", createCredentialFromPassword("password1"), null);
+        store.store("secret/myapp.mp2", createCredentialFromPassword("password2"), null);
+        store.remove("secret/myapp.mp2", PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR, null);
+        PasswordCredential remaining = store.retrieve("secret/myapp.mp", PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR,
+                null, createProtectionParameter("myroot"));
+        assertNotNull(remaining);
+        assertEquals("password1", String.valueOf(remaining.getPassword(ClearPassword.class).getPassword()));
+        PasswordCredential removed = store.retrieve("secret/myapp.mp2", PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR,
+                null, createProtectionParameter("myroot"));
+        assertNull(removed);
+    }
+
+    private HashicorpVaultCredentialStore createHashicorpVaultCredentialStore() throws Exception {
+        HashicorpVaultCredentialStore store = new HashicorpVaultCredentialStore();
+        Map<String, String> attributes = new HashMap<>();
+        attributes.put("host-address", vaultTestContainer.getHttpHostAddress());
+        attributes.put("namespace", "admin");
+        store.initialize(attributes, new CredentialStore.CredentialSourceProtectionParameter(
+                IdentityCredentials.NONE.withCredential(createCredentialFromPassword("myroot"))), new Provider[]{WildFlyElytronPasswordProvider.getInstance()});
+        return store;
+    }
+
     private PasswordCredential createCredentialFromPassword(String password) throws UnsupportedCredentialTypeException {
         try {
             PasswordFactory passwordFactory = PasswordFactory.getInstance(ClearPassword.ALGORITHM_CLEAR, WildFlyElytronPasswordProvider.getInstance());
@@ -77,5 +119,10 @@ public class HashicorpVaultCredentialStoreTestCase {
         } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
             throw new UnsupportedCredentialTypeException(e);
         }
+    }
+
+    private CredentialStore.CredentialSourceProtectionParameter createProtectionParameter(String protectionParameter) throws UnsupportedCredentialTypeException {
+        return new CredentialStore.CredentialSourceProtectionParameter(
+                IdentityCredentials.NONE.withCredential(createCredentialFromPassword(protectionParameter)));
     }
 }
