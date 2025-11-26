@@ -10,7 +10,7 @@ public class TokenLoginStrategy implements  VaultLoginStrategy {
 
     @Override
     public String tryLogin(LoginContext context) throws VaultException {
-        if (context.getToken() == null) {
+        if (context.getToken() == null || context.getToken().trim().isEmpty()) {
             throw new VaultException("Token is null, cannot login with token");
         }
         return context.getToken();

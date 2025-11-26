@@ -52,7 +52,7 @@ public class VaultConnector {
 
     public VaultConnector(String vaultUrl, JwtConfig jwtConfig, String namespace, SslConfig sslConfig) {
         this.vaultUrl = vaultUrl;
-        this.token = "";
+        this.token = null;
         this.namespace = namespace;
         this.sslConfig = sslConfig;
         this.jwtConfig = jwtConfig;
