@@ -44,7 +44,7 @@ public class VaultConnectorTestCase {
         startVaultTestContainer();
 
         // Test vault service
-        VaultConnector vaultService = new VaultConnector(vaultTestContainer.getHttpHostAddress(), "myroot", "secret/testing1", new SslConfig().verify(true), true);
+        VaultConnector vaultService = new VaultConnector(vaultTestContainer.getHttpHostAddress(), "myroot", "secret/testing1", new SslConfig().verify(true).build(), true);
         vaultService.configure();
         assertEquals("password123", vaultService.getSecret("secret/testing1", "top_secret"));
     }
@@ -55,7 +55,7 @@ public class VaultConnectorTestCase {
         startVaultTestContainer();
 
         // Test vault service
-        VaultConnector vaultService = new VaultConnector(vaultTestContainer.getHttpHostAddress(), "myroot", "secret/testing1", new SslConfig().verify(true), true);
+        VaultConnector vaultService = new VaultConnector(vaultTestContainer.getHttpHostAddress(), "myroot", "secret/testing1", new SslConfig().verify(true).build(), true);
         vaultService.configure();
         vaultService.putSecret("secret/testing1", "top_secret2", "password2");
 
@@ -68,7 +68,7 @@ public class VaultConnectorTestCase {
         startVaultTestContainer();
 
         // Test vault service
-        VaultConnector vaultService = new VaultConnector(vaultTestContainer.getHttpHostAddress(), "myroot", "secret/testing1", new SslConfig().verify(true), true);
+        VaultConnector vaultService = new VaultConnector(vaultTestContainer.getHttpHostAddress(), "myroot", "secret/testing1", new SslConfig().verify(true).build(), true);
         vaultService.configure();
         
         // First verify the secret exists
@@ -97,7 +97,7 @@ public class VaultConnectorTestCase {
         vaultTestContainer.start();
 
         // Test vault service with incorrect token - this should throw VaultException during configure()
-        VaultConnector vaultService = new VaultConnector(vaultTestContainer.getHttpHostAddress(), "incorrect-token", "admin", new SslConfig().verify(true), true);
+        VaultConnector vaultService = new VaultConnector(vaultTestContainer.getHttpHostAddress(), "incorrect-token", "admin", new SslConfig().verify(true).build(), true);
         assertThrows(VaultException.class, vaultService::configure,
                 "VaultException should be thrown due to authentication failure");
     }
@@ -108,7 +108,7 @@ public class VaultConnectorTestCase {
         startVaultTestContainer();
 
         // Test vault service
-        VaultConnector vaultService = new VaultConnector(vaultTestContainer.getHttpHostAddress(), "myroot", "admin", new SslConfig().verify(true), true);
+        VaultConnector vaultService = new VaultConnector(vaultTestContainer.getHttpHostAddress(), "myroot", "admin", new SslConfig().verify(true).build(), true);
         vaultService.configure();
         vaultService.removeSecret("secret/testing1", "top_secret");
     }
