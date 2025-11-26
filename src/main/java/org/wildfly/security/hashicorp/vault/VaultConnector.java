@@ -120,6 +120,16 @@ public class VaultConnector {
         }
 
         Map<String, Object> nameValuePairs = new HashMap<>();
+        // Read existing path to preserve other keys if those exist
+        LogicalResponse readResponse = this.vault.logical().read(path);
+        int readStatus = readResponse.getRestResponse().getStatus();
+        if (readStatus == 200) {
+            Map<String, String> existingData = readResponse.getData();
+            if (existingData != null) {
+                nameValuePairs.putAll(existingData);
+            }
+        }
+
         nameValuePairs.put(key, value);
         LogicalResponse response = this.vault.logical().write(path, nameValuePairs);
         int responseStatus = response.getRestResponse().getStatus();
@@ -128,7 +138,6 @@ public class VaultConnector {
             return;
         }
         if (responseStatus == 403) {
-            logger.tracef("Forbidden to store the secret in vault at path: %s", path);
             throw new VaultException("Forbidden to store secret at path: " + path);
         }
 
@@ -146,18 +155,45 @@ public class VaultConnector {
             throw new VaultException("Key cannot be null or empty");
         }
 
-        LogicalResponse response = this.vault.logical().delete(path);
-        int responseStatus = response.getRestResponse().getStatus();
-        if (responseStatus == 200 || responseStatus == 204) {
-            logger.tracef("Vault deleted secret successfully at path: %s, url: %s", path, this.vaultUrl);
-            return;
-        }
-        if (responseStatus == 403) {
-            logger.tracef("Forbidden to delete secret from vault at path: %s", path);
-            throw new VaultException("Forbidden to delete secret at path: " + path);
+        // Read existing path to preserve other keys at the same path
+        Map<String, Object> nameValuePairs = new HashMap<>();
+        LogicalResponse readResponse = this.vault.logical().read(path);
+        int readStatus = readResponse.getRestResponse().getStatus();
+        if (readStatus == 200) {
+            Map<String, String> existingData = readResponse.getData();
+            if (existingData != null) {
+                nameValuePairs.putAll(existingData);
+            }
         }
 
-        logger.tracef("Failed to delete secret, response status: %d", responseStatus);
-        throw new VaultException("Failed to delete secret at path: " + path + "/" + key + " (HTTP " + responseStatus + ")");
+        if (!nameValuePairs.containsKey(key)) {
+            logger.tracef("Key %s does not exist at path %s", key, path);
+            return;
+        }
+        nameValuePairs.remove(key);
+        if (nameValuePairs.isEmpty()) {
+            LogicalResponse deleteResponse = this.vault.logical().delete(path);
+            int deleteStatus = deleteResponse.getRestResponse().getStatus();
+            if (deleteStatus == 200 || deleteStatus == 204) {
+                logger.tracef("Vault deleted secret path successfully (no keys remaining): %s", path);
+                return;
+            }
+            if (deleteStatus == 403) {
+                throw new VaultException("Forbidden to delete secret at path: " + path);
+            }
+            throw new VaultException("Failed to delete secret at path: " + path + " (HTTP " + deleteStatus + ")");
+        } else {
+            // Write back the remaining keys
+            LogicalResponse writeResponse = this.vault.logical().write(path, nameValuePairs);
+            int writeStatus = writeResponse.getRestResponse().getStatus();
+            if (writeStatus == 200 || writeStatus == 204) {
+                logger.tracef("Vault removed key %s from path %s successfully", key, path);
+                return;
+            }
+            if (writeStatus == 403) {
+                throw new VaultException("Forbidden to update secret at path: " + path);
+            }
+            throw new VaultException("Failed to update secret at path: " + path + " after removing key " + key + " (HTTP " + writeStatus + ")");
+        }
     }
 }
