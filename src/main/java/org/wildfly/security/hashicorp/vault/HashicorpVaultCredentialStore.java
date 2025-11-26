@@ -19,6 +19,7 @@ import java.io.IOException;
 import java.security.KeyStore;
 import java.security.Provider;
 import java.security.spec.AlgorithmParameterSpec;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
@@ -28,6 +29,9 @@ import static org.wildfly.security.credential.store._private.ElytronMessages.log
  * Credential store backed by Hashicorp Vault
  */
 public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
+
+    private static final int DEFAULT_MAX_ALIASES = 10_000;
+    private static final int DEFAULT_MAX_DEPTH = 100;
 
     String hostAddress;
     String namespace;
@@ -227,8 +231,165 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
 
     @Override
     public Set<String> getAliases() throws UnsupportedOperationException, CredentialStoreException {
-        // We can list all keys associated with a path, but it is not possible to list all paths
-        // in feature pack we should implement method getAliases(String path)
-        throw new UnsupportedOperationException();
+        // Use "secret/" as the default path when none provided
+        return getAliases("secret/");
+    }
+
+    /**
+     * Get aliases from a specific path in Vault.
+     *
+     * @param path the Vault path to start listing from (e.g., "secret"). If null or empty, throw exception
+     * @return set of aliases in format "path.key", containing at most 10,000 aliases
+     * @throws CredentialStoreException if listing aliases fails
+     */
+    public Set<String> getAliases(String path) throws CredentialStoreException {
+        if (!initialized) {
+            throw new CredentialStoreException("Credential store is not initialized");
+        }
+        if (path == null || path.trim().isEmpty()) {
+            throw new CredentialStoreException("Empty or null path provided to getAliases operation");
+        }
+        return collectAliases(normalizePath(path), false, 0);
+    }
+
+    /**
+     * Get aliases from a specific path in Vault with optional recursive traversal.
+     *
+     * @param path the Vault path to start listing from. If null or empty, throw exception
+     * @param recursive if true, traverse subpaths; if false, only list aliases at the specified path
+     * @return set of aliases in format "path.key", containing at most 10,000 aliases
+     * @throws CredentialStoreException if listing aliases fails
+     */
+    public Set<String> getAliases(String path, boolean recursive) throws CredentialStoreException {
+        if (!initialized) {
+            throw new CredentialStoreException("Credential store is not initialized");
+        }
+        if (path == null || path.trim().isEmpty()) {
+            throw new CredentialStoreException("Empty or null path provided to getAliases operation");
+        }
+        return collectAliases(normalizePath(path), recursive, DEFAULT_MAX_DEPTH);
+    }
+
+    /**
+     * Get aliases from a specific path in Vault with optional recursive traversal.
+     *
+     * @param path the Vault path to start listing from. If null or empty, throw exception
+     * @param recursive if true, traverse subpaths; if false, only list aliases at the specified path
+     * @param recursiveDepth the maximum depth to traverse if recursive is true. 0 means only the specified path,
+     *                       1 means one level deep, etc. Ignored if recursive is false.
+     * @return set of aliases in format "path.key", containing at most 10,000 aliases
+     * @throws CredentialStoreException if listing aliases fails
+     */
+    public Set<String> getAliases(String path, boolean recursive, int recursiveDepth) throws CredentialStoreException {
+        if (!initialized) {
+            throw new CredentialStoreException("Credential store is not initialized");
+        }
+        if (path == null || path.trim().isEmpty()) {
+            throw new CredentialStoreException("Empty or null path provided to getAliases operation");
+        }
+        if (recursiveDepth < 0) {
+            throw new CredentialStoreException("recursive-depth must be non-negative, got: " + recursiveDepth);
+        }
+        return collectAliases(normalizePath(path), recursive, recursiveDepth);
+    }
+
+    /**
+     * Get aliases from a specific path in Vault with optional recursive traversal and maximum alias limit.
+     *
+     * @param path the Vault path to start listing from (e.g., "secret"). If null or empty, throw exception
+     * @param recursive if true, traverse subpaths; if false, only list aliases at the specified path
+     * @param recursiveDepth the maximum depth to traverse if recursive is true. 0 means only the specified path,
+     *                       1 means one level deep, etc. Ignored if recursive is false.
+     * @param maxNumberOfAliases the maximum number of aliases to return. Must be positive. Collection stops when this limit is reached.
+     * @return set of aliases in format "path.key", containing at most maxNumberOfAliases aliases
+     * @throws CredentialStoreException if listing aliases fails
+     */
+    public Set<String> getAliases(String path, boolean recursive, int recursiveDepth, int maxNumberOfAliases) throws CredentialStoreException {
+        if (!initialized) {
+            throw new CredentialStoreException("Credential store is not initialized");
+        }
+        if (path == null || path.trim().isEmpty()) {
+            throw new CredentialStoreException("Empty or null path provided to getAliases operation");
+        }
+        if (recursiveDepth < 0) {
+            throw new CredentialStoreException("recursive-depth must be non-negative, got: " + recursiveDepth);
+        }
+        if (maxNumberOfAliases <= 0) {
+            throw new CredentialStoreException("maxNumberOfAliases must be positive, got: " + maxNumberOfAliases);
+        }
+        return collectAliases(normalizePath(path), recursive, recursiveDepth, maxNumberOfAliases);
+    }
+
+    private Set<String> collectAliases(String path, boolean recursive, int maxDepth) throws CredentialStoreException {
+        return collectAliases(path, recursive, maxDepth, DEFAULT_MAX_ALIASES);
+    }
+
+    private Set<String> collectAliases(String path, boolean recursive, int maxDepth, int maxNumberOfAliases) throws CredentialStoreException {
+        Set<String> aliases = new HashSet<>();
+        collectAliasesRecursive(path, aliases, recursive, maxDepth, 0, maxNumberOfAliases);
+        return aliases;
+    }
+
+    // Keep an eye on https://github.com/hashicorp/vault/issues/5275 and remove this logic once hashicorp vault provides this operation
+    private void collectAliasesRecursive(String path, Set<String> aliases, boolean recursive, int maxDepth, int currentDepth, int maxNumberOfAliases) throws CredentialStoreException {
+        if (aliases.size() >= maxNumberOfAliases) {
+            return;
+        }
+
+        try {
+            Set<String> keys = vaultConnector.getKeysForPath(path);
+            for (String key : keys) {
+                if (aliases.size() >= maxNumberOfAliases) {
+                    return;
+                }
+                aliases.add(path + "." + key);
+            }
+        } catch (VaultException e) {
+            if (e.getMessage().contains("Path does not exist")) {
+                // ignore because this path in the tree can be empty, but other paths not so continue traversal
+            } else {
+                throw new CredentialStoreException("Could not read keys from path \"" + path + "\" (currentDepth=" + currentDepth + ", recursive=" + recursive + "), message is: " + e.getMessage(), e);
+            }
+        }
+
+        if (recursive && currentDepth < maxDepth && aliases.size() < maxNumberOfAliases) {
+            try {
+                Set<String> items = vaultConnector.listAllItemsAtPath(path);
+                if (items.isEmpty()) {
+                    return;
+                }
+                for (String item : items) {
+                    if (aliases.size() >= maxNumberOfAliases) {
+                        return;
+                    }
+                    String fullItemPath = normalizePath(path) + "/" + item;
+                    boolean isSubpath = item.endsWith("/");
+                    if (!isSubpath) {
+                        try {
+                            Set<String> keys = vaultConnector.getKeysForPath(fullItemPath);
+                            for (String key : keys) {
+                                if (aliases.size() >= maxNumberOfAliases) {
+                                    return;
+                                }
+                                aliases.add(fullItemPath + "." + key);
+                            }
+                        } catch (VaultException e) {
+                            // Path doesn't have keys or doesn't exist - continue with other paths
+                        }
+                    } else {
+                        collectAliasesRecursive(fullItemPath, aliases, recursive, maxDepth, currentDepth + 1, maxNumberOfAliases);
+                    }
+                }
+            } catch (VaultException e) {
+                String errorMsg = e.getMessage();
+                if (errorMsg != null && errorMsg.contains("403")) {
+                    throw new CredentialStoreException("Forbidden to list subpaths at path \"" + path + "\"", e);
+                }
+            }
+        }
+    }
+
+    private String normalizePath(String path) {
+        return path.endsWith("/") ? path.substring(0, path.length() - 1) : path;
     }
 }

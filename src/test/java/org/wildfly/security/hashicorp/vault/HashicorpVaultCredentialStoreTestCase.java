@@ -10,6 +10,7 @@ import org.testcontainers.vault.VaultContainer;
 import org.wildfly.security.auth.server.IdentityCredentials;
 import org.wildfly.security.credential.PasswordCredential;
 import org.wildfly.security.credential.store.CredentialStore;
+import org.wildfly.security.credential.store.CredentialStoreException;
 import org.wildfly.security.credential.store.UnsupportedCredentialTypeException;
 import org.wildfly.security.password.PasswordFactory;
 import org.wildfly.security.password.WildFlyElytronPasswordProvider;
@@ -21,10 +22,14 @@ import java.security.Provider;
 import java.security.spec.InvalidKeySpecException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.wildfly.security.hashicorp.vault.VaultTestUtils.startVaultTestContainer;
 
 public class HashicorpVaultCredentialStoreTestCase {
@@ -100,6 +105,241 @@ public class HashicorpVaultCredentialStoreTestCase {
         PasswordCredential removed = store.retrieve("secret/myapp.mp2", PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR,
                 null, createProtectionParameter("myroot"));
         assertNull(removed);
+    }
+
+    /**
+     * Read aliases from a specific vault path that contains secrets.
+     * Test that only the aliases stored at specific path are returned, none from the other path
+     */
+    @Test
+    public void testGetAliasesWithPath() throws Exception {
+        vaultTestContainer = startVaultTestContainer();
+        HashicorpVaultCredentialStore cs = new HashicorpVaultCredentialStore();
+        Map<String, String> attributes = new HashMap<>();
+        attributes.put("host-address", vaultTestContainer.getHttpHostAddress());
+        cs.initialize(attributes, new CredentialStore.CredentialSourceProtectionParameter(
+                        IdentityCredentials.NONE.withCredential(createCredentialFromPassword("myroot"))),
+                new Provider[]{WildFlyElytronPasswordProvider.getInstance()});
+        Set<String> aliases = cs.getAliases("secret/testing1");
+        assertNotNull(aliases);
+        assertFalse(aliases.isEmpty());
+        assertTrue(aliases.contains("secret/testing1.top_secret"));
+        assertFalse(aliases.contains("secret/testing2.dbuser"));
+        assertFalse(aliases.contains("secret/testing2.jmsuser"));
+
+        aliases = cs.getAliases("secret/testing2");
+        assertNotNull(aliases);
+        assertFalse(aliases.isEmpty());
+        assertTrue(aliases.contains("secret/testing2.dbuser"));
+        assertTrue(aliases.contains("secret/testing2.jmsuser"));
+        assertFalse(aliases.contains("secret/testing1.top_secret"));
+    }
+
+    /**
+     * The call must throw a {@link CredentialStoreException} when null path is provided
+     */
+    @Test
+    public void testGetAliasesWithNullPath() throws Exception {
+        vaultTestContainer = startVaultTestContainer();
+        HashicorpVaultCredentialStore cs = new HashicorpVaultCredentialStore();
+        Map<String, String> attributes = new HashMap<>();
+        attributes.put("host-address", vaultTestContainer.getHttpHostAddress());
+        cs.initialize(attributes, new CredentialStore.CredentialSourceProtectionParameter(
+                        IdentityCredentials.NONE.withCredential(createCredentialFromPassword("myroot"))),
+                new Provider[]{WildFlyElytronPasswordProvider.getInstance()});
+        assertThrows(CredentialStoreException.class, () -> cs.getAliases((String) null));
+    }
+
+    /**
+     * The call must throw a {@link CredentialStoreException} when empty path is provided
+     */
+    @Test
+    public void testGetAliasesWithEmptyPath() throws Exception {
+        vaultTestContainer = startVaultTestContainer();
+        HashicorpVaultCredentialStore cs = new HashicorpVaultCredentialStore();
+        Map<String, String> attributes = new HashMap<>();
+        attributes.put("host-address", vaultTestContainer.getHttpHostAddress());
+        cs.initialize(attributes, new CredentialStore.CredentialSourceProtectionParameter(
+                        IdentityCredentials.NONE.withCredential(createCredentialFromPassword("myroot"))),
+                new Provider[]{WildFlyElytronPasswordProvider.getInstance()});
+        assertThrows(CredentialStoreException.class, () -> cs.getAliases(""));
+    }
+
+    /**
+     * Test that non-recursive mode (recursive=false) behaves the same as getAliases(path)
+     */
+    @Test
+    public void testGetAliasesNonRecursive() throws Exception {
+        vaultTestContainer = startVaultTestContainer();
+        HashicorpVaultCredentialStore cs = createHashicorpVaultCredentialStore();
+
+        Set<String> aliases1 = cs.getAliases("secret/testing1");
+        Set<String> aliases2 = cs.getAliases("secret/testing1", false, 0);
+        
+        assertEquals(aliases1, aliases2);
+        assertTrue(aliases2.contains("secret/testing1.top_secret"));
+    }
+
+    /**
+     * Test recursive mode with depth 0 - should only return aliases at the specified path
+     */
+    @Test
+    public void testGetAliasesRecursiveDepth0() throws Exception {
+        vaultTestContainer = startVaultTestContainer();
+        HashicorpVaultCredentialStore cs = createHashicorpVaultCredentialStore();
+
+        cs.store("secret/app1.key1", createCredentialFromPassword("value1"), null);
+        cs.store("secret/app1.key2", createCredentialFromPassword("value2"), null);
+        cs.store("secret/app1/subapp.key3", createCredentialFromPassword("value3"), null);
+
+        Set<String> aliases = cs.getAliases("secret/app1", true, 0);
+        
+        assertTrue(aliases.contains("secret/app1.key1"));
+        assertTrue(aliases.contains("secret/app1.key2"));
+        // Should NOT include any subpath keys when depth is 0
+        assertFalse(aliases.contains("secret/app1/subapp.key3"));
+    }
+
+    /**
+     * Test recursive mode with depth 1 - should return aliases one level deep
+     */
+    @Test
+    public void testGetAliasesRecursiveDepth1() throws Exception {
+        vaultTestContainer = startVaultTestContainer();
+        HashicorpVaultCredentialStore cs = createHashicorpVaultCredentialStore();
+
+        cs.store("secret/app1.key1", createCredentialFromPassword("value1"), null);
+        cs.store("secret/app1.key2", createCredentialFromPassword("value2"), null);
+        cs.store("secret/app1/subapp1.key3", createCredentialFromPassword("value3"), null);
+        cs.store("secret/app1/subapp2.key4", createCredentialFromPassword("value4"), null);
+        cs.store("secret/app1/subapp1/deep.key5", createCredentialFromPassword("value5"), null);
+        Set<String> aliases = cs.getAliases("secret/app1", true, 1);
+
+        assertTrue(aliases.contains("secret/app1.key1"));
+        assertTrue(aliases.contains("secret/app1.key2"));
+
+        assertTrue(aliases.contains("secret/app1/subapp1.key3"));
+        assertTrue(aliases.contains("secret/app1/subapp2.key4"));
+        assertFalse(aliases.contains("secret/app1/subapp1/deep.key5"));
+
+    }
+
+    /**
+     * Test recursive mode with depth 2 - should return aliases two levels deep
+     */
+    @Test
+    public void testGetAliasesRecursiveDepth2() throws Exception {
+        vaultTestContainer = startVaultTestContainer();
+        HashicorpVaultCredentialStore cs = createHashicorpVaultCredentialStore();
+
+        cs.store("secret/app1.key1", createCredentialFromPassword("value1"), null);
+        cs.store("secret/app1/subapp1.key2", createCredentialFromPassword("value2"), null);
+        cs.store("secret/app1/subapp1/deep.key3", createCredentialFromPassword("value3"), null);
+        cs.store("secret/app1/subapp1/deep/deeper.key4", createCredentialFromPassword("value4"), null);
+
+        Set<String> aliases = cs.getAliases("secret/app1", true, 2);
+        assertTrue(aliases.contains("secret/app1.key1"));
+        assertTrue(aliases.contains("secret/app1/subapp1.key2"));
+        assertTrue(aliases.contains("secret/app1/subapp1/deep.key3"));
+        // Should NOT include keys deeper than depth 2
+        assertFalse(aliases.contains("secret/app1/subapp1/deep/deeper.key4"));
+    }
+
+    /**
+     * Test recursive listing with multiple subpaths at the same level
+     */
+    @Test
+    public void testGetAliasesRecursiveMultipleSubpaths() throws Exception {
+        vaultTestContainer = startVaultTestContainer();
+        HashicorpVaultCredentialStore cs = createHashicorpVaultCredentialStore();
+
+        cs.store("secret/app1.key1", createCredentialFromPassword("value1"), null);
+        cs.store("secret/app1/subapp1.key2", createCredentialFromPassword("value2"), null);
+        cs.store("secret/app1/subapp2.key3", createCredentialFromPassword("value3"), null);
+        cs.store("secret/app1/subapp3.key4", createCredentialFromPassword("value4"), null);
+
+        Set<String> aliases = cs.getAliases("secret/app1", true, 1);
+
+        assertTrue(aliases.contains("secret/app1.key1"));
+        assertTrue(aliases.contains("secret/app1/subapp1.key2"));
+        assertTrue(aliases.contains("secret/app1/subapp2.key3"));
+        assertTrue(aliases.contains("secret/app1/subapp3.key4"));
+        assertEquals(4, aliases.size());
+    }
+
+    /**
+     * Test recursive listing with empty subpaths (subpaths that exist but have no keys)
+     */
+    @Test
+    public void testGetAliasesRecursiveWithEmptySubpaths() throws Exception {
+        vaultTestContainer = startVaultTestContainer();
+        HashicorpVaultCredentialStore cs = createHashicorpVaultCredentialStore();
+
+        cs.store("secret/app1.key1", createCredentialFromPassword("value1"), null);
+        cs.store("secret/app1/subapp1/deep.key2", createCredentialFromPassword("value2"), null);
+
+        Set<String> aliases = cs.getAliases("secret/app1", true, 2);
+
+        assertTrue(aliases.contains("secret/app1.key1"));
+        assertTrue(aliases.contains("secret/app1/subapp1/deep.key2"));
+    }
+
+    /**
+     * Test getAliases with maxNumberOfAliases limit - recursive, limit reached during traversal
+     */
+    @Test
+    public void testGetAliasesWithMaxLimitRecursiveStopsDuringTraversal() throws Exception {
+        vaultTestContainer = startVaultTestContainer();
+        HashicorpVaultCredentialStore cs = createHashicorpVaultCredentialStore();
+
+        cs.store("secret/app1.key1", createCredentialFromPassword("value1"), null);
+        cs.store("secret/app1.key2", createCredentialFromPassword("value2"), null);
+        cs.store("secret/app1/subapp1.key3", createCredentialFromPassword("value3"), null);
+        cs.store("secret/app1/subapp1.key4", createCredentialFromPassword("value4"), null);
+        cs.store("secret/app1/subapp2.key5", createCredentialFromPassword("value5"), null);
+        cs.store("secret/app1/subapp2.key6", createCredentialFromPassword("value6"), null);
+
+        Set<String> aliases = cs.getAliases("secret/app1", true, 1, 3);
+        assertTrue(aliases.contains("secret/app1.key1"));
+        assertTrue(aliases.contains("secret/app1.key2"));
+        assertEquals(3, aliases.size());
+    }
+
+    /**
+     * Test getAliases with maxNumberOfAliases - recursive with depth 2, limit reached at different levels
+     */
+    @Test
+    public void testGetAliasesWithMaxLimitRecursiveDepth2() throws Exception {
+        vaultTestContainer = startVaultTestContainer();
+        HashicorpVaultCredentialStore cs = createHashicorpVaultCredentialStore();
+
+        cs.store("secret/app1.key1", createCredentialFromPassword("value1"), null);
+        cs.store("secret/app1/subapp1.key2", createCredentialFromPassword("value2"), null);
+        cs.store("secret/app1/subapp1/deep.key3", createCredentialFromPassword("value3"), null);
+        cs.store("secret/app1/subapp2.key4", createCredentialFromPassword("value4"), null);
+
+        Set<String> aliases = cs.getAliases("secret/app1", true, 2, 2);
+
+        assertTrue(aliases.contains("secret/app1.key1"));
+        assertEquals(2, aliases.size());
+    }
+
+    /**
+     * Test getAliases with maxNumberOfAliases - recursive false should ignore depth but respect limit
+     */
+    @Test
+    public void testGetAliasesWithMaxLimitRecursiveFalse() throws Exception {
+        vaultTestContainer = startVaultTestContainer();
+        HashicorpVaultCredentialStore cs = createHashicorpVaultCredentialStore();
+
+        cs.store("secret/app1.key1", createCredentialFromPassword("value1"), null);
+        cs.store("secret/app1.key2", createCredentialFromPassword("value2"), null);
+        cs.store("secret/app1/subapp1.key3", createCredentialFromPassword("value3"), null);
+        Set<String> aliases = cs.getAliases("secret/app1", false, 10, 1);
+        
+        assertEquals(1, aliases.size());
+        assertTrue(aliases.contains("secret/app1.key1") || aliases.contains("secret/app1.key2"));
+        assertFalse(aliases.contains("secret/app1/subapp1.key3"));
     }
 
     private HashicorpVaultCredentialStore createHashicorpVaultCredentialStore() throws Exception {
