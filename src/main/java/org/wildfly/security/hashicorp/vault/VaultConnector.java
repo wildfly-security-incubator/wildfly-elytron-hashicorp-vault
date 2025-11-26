@@ -5,7 +5,9 @@
 package org.wildfly.security.hashicorp.vault;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 import io.github.jopenlibs.vault.SslConfig;
 import io.github.jopenlibs.vault.Vault;
@@ -194,6 +196,22 @@ public class VaultConnector {
                 throw new VaultException("Forbidden to update secret at path: " + path);
             }
             throw new VaultException("Failed to update secret at path: " + path + " after removing key " + key + " (HTTP " + writeStatus + ")");
+        }
+    }
+
+    /**
+     * Get all keys for a specific path
+     */
+    public Set<String> getKeysForPath(String path) throws VaultException {
+        LogicalResponse response = this.vault.logical().read(path);
+        int responseStatus = response.getRestResponse().getStatus();
+        if (responseStatus == 200) {
+            Map<String, String> data = response.getData();
+            return new HashSet<>(data.keySet());
+        } else if (responseStatus == 404) {
+            throw new VaultException("Path does not exist or forbidden: \"" + path + "\"");
+        } else {
+            throw new VaultException("Failed to read aliases on path: \"" + path + "\"");
         }
     }
 }
