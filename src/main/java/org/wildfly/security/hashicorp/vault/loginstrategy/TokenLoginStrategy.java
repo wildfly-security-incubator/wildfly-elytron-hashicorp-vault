@@ -1,0 +1,18 @@
+package org.wildfly.security.hashicorp.vault.loginstrategy;
+
+import io.github.jopenlibs.vault.VaultException;
+
+/**
+ * Login using Vault token. This is just a dummy implementation since token is default and we cannot determine token
+ * validity until login.
+ */
+public class TokenLoginStrategy implements  VaultLoginStrategy {
+
+    @Override
+    public String tryLogin(LoginContext context) throws VaultException {
+        if (context.getToken() == null) {
+            throw new VaultException("Token is null, cannot login with token");
+        }
+        return context.getToken();
+    }
+}

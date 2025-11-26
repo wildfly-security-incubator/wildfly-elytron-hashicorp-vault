@@ -14,9 +14,13 @@ import io.github.jopenlibs.vault.SslConfig;
 import io.github.jopenlibs.vault.Vault;
 import io.github.jopenlibs.vault.VaultConfig;
 import io.github.jopenlibs.vault.VaultException;
-import io.github.jopenlibs.vault.response.AuthResponse;
 import io.github.jopenlibs.vault.response.LogicalResponse;
 import org.jboss.logging.Logger;
+import org.wildfly.security.hashicorp.vault.loginstrategy.ClientCertificateLoginStrategy;
+import org.wildfly.security.hashicorp.vault.loginstrategy.JwtLoginStrategy;
+import org.wildfly.security.hashicorp.vault.loginstrategy.LoginContext;
+import org.wildfly.security.hashicorp.vault.loginstrategy.TokenLoginStrategy;
+import org.wildfly.security.hashicorp.vault.loginstrategy.VaultLoginStrategy;
 
 /**
  * Vault Connector
@@ -32,6 +36,12 @@ public class VaultConnector {
     private Vault vault;
 
     private JwtConfig jwtConfig;
+
+    private final List<VaultLoginStrategy> loginStrategiesPrioritized = List.of(
+            new ClientCertificateLoginStrategy(),
+            new JwtLoginStrategy(),
+            new TokenLoginStrategy()
+    );
 
     public VaultConnector(String vaultUrl, String token, String namespace, SslConfig sslConfig, boolean sslVerify) {
         this.vaultUrl = vaultUrl;
@@ -52,52 +62,41 @@ public class VaultConnector {
         try {
             VaultConfig config = new VaultConfig()
                     .sslConfig(this.sslConfig)
-                    .address(this.vaultUrl)
-                    .token(this.token);
+                    .address(this.vaultUrl);
 
             if (this.namespace != null && !this.namespace.isEmpty()) {
                 config.nameSpace(this.namespace);
             }
 
-            this.vault = Vault.create(config);
+            final LoginContext loginContext = new LoginContext(token, jwtConfig,
+                    Vault.create(config.build()));
+            this.vault = tryLoginWithFallback(loginContext, config);
 
-            AuthResponse authResponse = null;
-
-            try {
-                authResponse = this.vault.auth().loginByCert();
-                logger.debug("Logged in using client certificate");
-            } catch (VaultException e) {
-                logger.debugf(e, "Vault authentication with client certificate failed");
-            }
-
-            if (authResponse == null && this.jwtConfig != null) {
-                try {
-                    authResponse = this.vault.auth().loginByJwt(
-                            this.jwtConfig.getJwtProvider(),
-                            this.jwtConfig.getJwtRole(),
-                            this.jwtConfig.getJwt());
-                    logger.debug("Logged in using JWT");
-                } catch (VaultException e) {
-                    logger.debugf(e, "Vault authentication with JWT failed");
-                }
-            }
-
-            //a non-token login happened
-            if (authResponse != null) {
-                //use received token for further authentication
-                config.token(authResponse.getAuthClientToken());
-                //new instance will use set token
-                this.vault = Vault.create(config);
-            } else {
-                logger.debug("Logging in using Vault token");
-            }
-
-            this.vault.auth().lookupSelf();
             logger.debugf("Vault configuration successful for URL: %s", this.vaultUrl);
         } catch (VaultException e) {
             logger.errorf("Failed to configure Vault connection to %s: %s", this.vaultUrl, e.getMessage());
             throw e;
         }
+    }
+
+    private Vault tryLoginWithFallback(LoginContext loginContext, VaultConfig config) throws VaultException {
+        for (VaultLoginStrategy strategy : loginStrategiesPrioritized) {
+            try {
+                String response = strategy.tryLogin(loginContext);
+
+                if (response != null) {
+                    config.token(response);
+                    Vault vault = Vault.create(config.build());
+                    //test that it really works
+                    vault.auth().lookupSelf();
+                    return vault;
+                }
+            } catch (VaultException e) {
+                logger.debugf(e, "Unable to login with %s", strategy.getClass().getSimpleName());
+            }
+        }
+
+        throw new VaultException("All login strategies failed");
     }
 
 
