@@ -46,7 +46,6 @@ public class VaultConnectorHttpsTestCase {
         httpsSslConfig = new SslConfig()
                 //to enable HTTPS
                 .pemFile(vaultTestContainer.getHttpsTrustFile().toFile())
-                //for TLS certificate auth method
                 .verify(true)
                 .build();
     }
