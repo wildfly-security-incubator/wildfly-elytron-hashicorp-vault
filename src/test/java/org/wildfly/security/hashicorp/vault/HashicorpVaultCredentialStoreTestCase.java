@@ -10,6 +10,7 @@ import org.testcontainers.vault.VaultContainer;
 import org.wildfly.security.auth.server.IdentityCredentials;
 import org.wildfly.security.credential.PasswordCredential;
 import org.wildfly.security.credential.store.CredentialStore;
+import org.wildfly.security.credential.store.CredentialStoreException;
 import org.wildfly.security.credential.store.UnsupportedCredentialTypeException;
 import org.wildfly.security.password.PasswordFactory;
 import org.wildfly.security.password.WildFlyElytronPasswordProvider;
@@ -21,10 +22,14 @@ import java.security.Provider;
 import java.security.spec.InvalidKeySpecException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.wildfly.security.hashicorp.vault.VaultTestUtils.startVaultTestContainer;
 
 public class HashicorpVaultCredentialStoreTestCase {
@@ -100,6 +105,64 @@ public class HashicorpVaultCredentialStoreTestCase {
         PasswordCredential removed = store.retrieve("secret/myapp.mp2", PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR,
                 null, createProtectionParameter("myroot"));
         assertNull(removed);
+    }
+
+    /**
+     * Read aliases from a specific vault path that contains secrets.
+     * Test that only the aliases stored at specific path are returned, none from the other path
+     */
+    @Test
+    public void testGetAliasesWithPath() throws Exception {
+        vaultTestContainer = startVaultTestContainer();
+        HashicorpVaultCredentialStore cs = new HashicorpVaultCredentialStore();
+        Map<String, String> attributes = new HashMap<>();
+        attributes.put("host-address", vaultTestContainer.getHttpHostAddress());
+        cs.initialize(attributes, new CredentialStore.CredentialSourceProtectionParameter(
+                        IdentityCredentials.NONE.withCredential(createCredentialFromPassword("myroot"))),
+                new Provider[]{WildFlyElytronPasswordProvider.getInstance()});
+        Set<String> aliases = cs.getAliases("secret/testing1");
+        assertNotNull(aliases);
+        assertFalse(aliases.isEmpty());
+        assertTrue(aliases.contains("secret/testing1.top_secret"));
+        assertFalse(aliases.contains("secret/testing2.dbuser"));
+        assertFalse(aliases.contains("secret/testing2.jmsuser"));
+
+        aliases = cs.getAliases("secret/testing2");
+        assertNotNull(aliases);
+        assertFalse(aliases.isEmpty());
+        assertTrue(aliases.contains("secret/testing2.dbuser"));
+        assertTrue(aliases.contains("secret/testing2.jmsuser"));
+        assertFalse(aliases.contains("secret/testing1.top_secret"));
+    }
+
+    /**
+     * The call must throw a {@link CredentialStoreException} when null path is provided
+     */
+    @Test
+    public void testGetAliasesWithNullPath() throws Exception {
+        vaultTestContainer = startVaultTestContainer();
+        HashicorpVaultCredentialStore cs = new HashicorpVaultCredentialStore();
+        Map<String, String> attributes = new HashMap<>();
+        attributes.put("host-address", vaultTestContainer.getHttpHostAddress());
+        cs.initialize(attributes, new CredentialStore.CredentialSourceProtectionParameter(
+                        IdentityCredentials.NONE.withCredential(createCredentialFromPassword("myroot"))),
+                new Provider[]{WildFlyElytronPasswordProvider.getInstance()});
+        assertThrows(CredentialStoreException.class, () -> cs.getAliases((String) null));
+    }
+
+    /**
+     * The call must throw a {@link CredentialStoreException} when empty path is provided
+     */
+    @Test
+    public void testGetAliasesWithEmptyPath() throws Exception {
+        vaultTestContainer = startVaultTestContainer();
+        HashicorpVaultCredentialStore cs = new HashicorpVaultCredentialStore();
+        Map<String, String> attributes = new HashMap<>();
+        attributes.put("host-address", vaultTestContainer.getHttpHostAddress());
+        cs.initialize(attributes, new CredentialStore.CredentialSourceProtectionParameter(
+                        IdentityCredentials.NONE.withCredential(createCredentialFromPassword("myroot"))),
+                new Provider[]{WildFlyElytronPasswordProvider.getInstance()});
+        assertThrows(CredentialStoreException.class, () -> cs.getAliases(""));
     }
 
     private HashicorpVaultCredentialStore createHashicorpVaultCredentialStore() throws Exception {

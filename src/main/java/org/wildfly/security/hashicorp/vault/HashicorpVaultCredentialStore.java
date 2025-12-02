@@ -19,6 +19,7 @@ import java.io.IOException;
 import java.security.KeyStore;
 import java.security.Provider;
 import java.security.spec.AlgorithmParameterSpec;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
@@ -227,8 +228,43 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
 
     @Override
     public Set<String> getAliases() throws UnsupportedOperationException, CredentialStoreException {
-        // We can list all keys associated with a path, but it is not possible to list all paths
-        // in feature pack we should implement method getAliases(String path)
-        throw new UnsupportedOperationException();
+        // Use "secret/" as the default path when none provided
+        return getAliases("secret/");
+    }
+
+    /**
+     * Get aliases from a specific path in Vault.
+     *
+     * @param path the Vault path to start listing from (e.g., "secret"). If null or empty, throw exception
+     * @return set of aliases in format "path.key"
+     * @throws CredentialStoreException if listing aliases fails
+     */
+
+    public Set<String> getAliases(String path) throws CredentialStoreException {
+        if (!initialized) {
+            throw new CredentialStoreException("Credential store is not initialized");
+        }
+        if (path == null || path.trim().isEmpty()) {
+            throw new CredentialStoreException("Empty or null path provided to getAliases operation");
+        }
+        return collectAliases(normalizePath(path));
+    }
+
+    private Set<String> collectAliases(String path) throws CredentialStoreException {
+        Set<String> aliases = new HashSet<>();
+        try {
+            Set<String> keys = vaultConnector.getKeysForPath(path);
+            for (String key : keys) {
+                String alias = path + "." + key;
+                aliases.add(alias);
+            }
+        } catch (VaultException e) {
+            throw new CredentialStoreException("Could not read keys from path \"" + path + "\", message is: " + e.getMessage());
+        }
+        return aliases;
+    }
+
+    private String normalizePath(String path) {
+        return path.endsWith("/") ? path.substring(0, path.length() - 1) : path;
     }
 }
