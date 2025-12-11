@@ -5,7 +5,10 @@
 package org.wildfly.security.hashicorp.vault;
 
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import io.github.jopenlibs.vault.SslConfig;
 import io.github.jopenlibs.vault.Vault;
@@ -194,6 +197,56 @@ public class VaultConnector {
                 throw new VaultException("Forbidden to update secret at path: " + path);
             }
             throw new VaultException("Failed to update secret at path: " + path + " after removing key " + key + " (HTTP " + writeStatus + ")");
+        }
+    }
+
+    /**
+     * Get all keys for a specific path
+     */
+    public Set<String> getKeysForPath(String path) throws VaultException {
+        LogicalResponse response = this.vault.logical().read(path);
+        int responseStatus = response.getRestResponse().getStatus();
+        if (responseStatus == 200) {
+            Map<String, String> data = response.getData();
+            if (data != null && !data.isEmpty()) {
+                return new HashSet<>(data.keySet());
+            }
+            return new HashSet<>();
+        } else if (responseStatus == 404) {
+            throw new VaultException("Path does not exist or forbidden: \"" + path + "\"");
+        } else {
+            throw new VaultException("Failed to read aliases on path: \"" + path + "\"");
+        }
+    }
+
+    /**
+     * Get a set of all items at a given path (without the parent path prefix)
+     */
+    public Set<String> listAllItemsAtPath(String path) throws VaultException {
+        if (path == null || path.trim().isEmpty()) {
+            throw new VaultException("Path cannot be null or empty");
+        }
+        // vault expects trailing slash with list operation
+        String listPath = path.endsWith("/") ? path : path + "/";
+        
+        try {
+            LogicalResponse response = this.vault.logical().list(listPath);
+            int responseStatus = response.getRestResponse().getStatus();
+            if (responseStatus == 200) {
+                List<String> keys = response.getListData();
+                if (keys != null && !keys.isEmpty()) {
+                    return new HashSet<>(keys);
+                }
+                return new HashSet<>();
+            } else if (responseStatus == 404) {
+                throw new VaultException("Path not found in vault: \"" + path + "\"");
+            } else if (responseStatus == 403) {
+                throw new VaultException("Forbidden to list subpaths at path: \"" + path + "\"");
+            } else {
+                throw new VaultException("Failed to list subpaths at path: \"" + path + "\" (HTTP " + responseStatus + ")");
+            }
+        } catch (ClassCastException e) {
+            throw new VaultException("Unexpected response format when listing subpaths at path: \"" + path + "\": " + e.getMessage());
         }
     }
 }
