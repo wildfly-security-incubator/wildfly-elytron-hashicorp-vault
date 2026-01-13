@@ -79,6 +79,14 @@ public class VaultConnector {
         }
     }
 
+    /**
+     * Login with subsequently with each method and stop when login was successful. Resulting Vault will carry
+     * VaultConfig with token which obtained from the final login attempt.
+     * @param loginContext current login context
+     * @param config initial VaultConfig
+     * @return Vault with token configured
+     * @throws VaultException thrown when anything goes wrong, including situation when all methods fail.
+     */
     private Vault tryLoginWithFallback(LoginContext loginContext, VaultConfig config) throws VaultException {
         for (VaultLoginStrategy strategy : loginStrategiesPrioritized) {
             try {
@@ -87,7 +95,7 @@ public class VaultConnector {
                 if (response != null) {
                     config.token(response);
                     Vault vault = Vault.create(config.build());
-                    //test that it really works
+                    //test that token can be used to perform anything requiring authentication
                     vault.auth().lookupSelf();
                     return vault;
                 }
