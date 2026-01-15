@@ -8,7 +8,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
         java: ['17', '21']
     steps:
       - uses: actions/checkout@v2
@@ -16,7 +16,8 @@ jobs:
         uses: actions/setup-java@v1
         with:
           java-version: ${{ matrix.java }}
-      - name: Set up Docker Compose
+      - name: Set up Docker Compose (Linux)
+        if: runner.os == 'Linux'
         uses: docker/setup-compose-action@v1
         with:
             version: latest
@@ -28,5 +29,9 @@ jobs:
           restore-keys: ${{ runner.os }}-m2
       - name: Version Info
         run: mvn -version
-      - name: Build with Maven
+      - name: Build with Maven (Linux - Full Tests)
+        if: runner.os == 'Linux'
         run: mvn -B verify --file pom.xml
+      - name: Build with Maven (macOS/Windows - Compile Only)
+        if: runner.os != 'Linux'
+        run: mvn -B clean compile --file pom.xml
