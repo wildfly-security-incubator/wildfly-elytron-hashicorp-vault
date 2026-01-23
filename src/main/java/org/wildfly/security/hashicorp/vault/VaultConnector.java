@@ -4,6 +4,7 @@
  */
 package org.wildfly.security.hashicorp.vault;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -36,12 +37,6 @@ public class VaultConnector {
     private Vault vault;
 
     private JwtConfig jwtConfig;
-
-    private final List<VaultLoginStrategy> loginStrategiesPrioritized = List.of(
-            new ClientCertificateLoginStrategy(),
-            new JwtLoginStrategy(),
-            new TokenLoginStrategy()
-    );
 
     public VaultConnector(String vaultUrl, String token, String namespace, SslConfig sslConfig, boolean sslVerify) {
         this.vaultUrl = vaultUrl;
@@ -80,15 +75,16 @@ public class VaultConnector {
     }
 
     /**
-     * Login with subsequently with each method and stop when login was successful. Resulting Vault will carry
+     * Login with subsequently with each possible method and stop when login was successful. Resulting Vault will carry
      * VaultConfig with token which obtained from the final login attempt.
+     * Note that only methods which prerequisites are satisfied will be tried.
      * @param loginContext current login context
      * @param config initial VaultConfig
      * @return Vault with token configured
      * @throws VaultException thrown when anything goes wrong, including situation when all methods fail.
      */
     private Vault tryLoginWithFallback(LoginContext loginContext, VaultConfig config) throws VaultException {
-        for (VaultLoginStrategy strategy : loginStrategiesPrioritized) {
+        for (VaultLoginStrategy strategy : composePossibleLoginStrategiesPrioritized(loginContext, config.getSslConfig())) {
             try {
                 String response = strategy.tryLogin(loginContext);
 
@@ -107,6 +103,20 @@ public class VaultConnector {
         throw new VaultException("All login strategies failed");
     }
 
+    private List<VaultLoginStrategy> composePossibleLoginStrategiesPrioritized(final LoginContext loginContext,
+                                                                               final SslConfig sslConfig) {
+        final List<VaultLoginStrategy> loginStrategies = new ArrayList<>();
+        if (sslConfig != null) {
+            loginStrategies.add(new ClientCertificateLoginStrategy());
+        }
+        if (loginContext.getJwtConfig() != null) {
+            loginStrategies.add(new JwtLoginStrategy());
+        }
+        if (loginContext.getToken() != null) {
+            loginStrategies.add(new TokenLoginStrategy());
+        }
+        return loginStrategies;
+    }
 
     /**
      * Retrieve a secret from Vault

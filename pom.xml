@@ -34,6 +34,7 @@
         <version.io.rest-assured>5.5.6</version.io.rest-assured>
         <version.io.rest-assured.json-path>5.5.5</version.io.rest-assured.json-path>
         <version.maven.surefire.plugin>3.5.3</version.maven.surefire.plugin>
+        <version.org.bitbucket.b_c.jose4j>0.9.6</version.org.bitbucket.b_c.jose4j>
 
         <!-- Nexus Settings -->
         <nexus.repository.staging>wildfly-staging</nexus.repository.staging>
@@ -121,7 +122,7 @@
         <dependency>
             <groupId>org.bitbucket.b_c</groupId>
             <artifactId>jose4j</artifactId>
-            <version>0.9.6</version>
+            <version>${version.org.bitbucket.b_c.jose4j}</version>
             <scope>test</scope>
         </dependency>
 
