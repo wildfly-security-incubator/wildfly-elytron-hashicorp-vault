@@ -4,6 +4,7 @@
  */
 package org.wildfly.security.hashicorp.vault;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -14,9 +15,13 @@ import io.github.jopenlibs.vault.SslConfig;
 import io.github.jopenlibs.vault.Vault;
 import io.github.jopenlibs.vault.VaultConfig;
 import io.github.jopenlibs.vault.VaultException;
-import io.github.jopenlibs.vault.response.AuthResponse;
 import io.github.jopenlibs.vault.response.LogicalResponse;
 import org.jboss.logging.Logger;
+import org.wildfly.security.hashicorp.vault.loginstrategy.ClientCertificateLoginStrategy;
+import org.wildfly.security.hashicorp.vault.loginstrategy.JwtLoginStrategy;
+import org.wildfly.security.hashicorp.vault.loginstrategy.LoginContext;
+import org.wildfly.security.hashicorp.vault.loginstrategy.TokenLoginStrategy;
+import org.wildfly.security.hashicorp.vault.loginstrategy.VaultLoginStrategy;
 
 /**
  * Vault Connector
@@ -31,6 +36,8 @@ public class VaultConnector {
     private final SslConfig sslConfig;
     private Vault vault;
 
+    private JwtConfig jwtConfig;
+
     public VaultConnector(String vaultUrl, String token, String namespace, SslConfig sslConfig, boolean sslVerify) {
         this.vaultUrl = vaultUrl;
         this.token = token;
@@ -38,32 +45,28 @@ public class VaultConnector {
         this.sslConfig = sslConfig;
     }
 
+    public VaultConnector(String vaultUrl, JwtConfig jwtConfig, String namespace, SslConfig sslConfig) {
+        this.vaultUrl = vaultUrl;
+        this.token = null;
+        this.namespace = namespace;
+        this.sslConfig = sslConfig;
+        this.jwtConfig = jwtConfig;
+    }
+
     public void configure() throws VaultException {
         try {
             VaultConfig config = new VaultConfig()
                     .sslConfig(this.sslConfig)
-                    .address(this.vaultUrl)
-                    .token(this.token);
+                    .address(this.vaultUrl);
 
             if (this.namespace != null && !this.namespace.isEmpty()) {
                 config.nameSpace(this.namespace);
             }
 
-            this.vault = Vault.create(config);
+            final LoginContext loginContext = new LoginContext(token, jwtConfig,
+                    Vault.create(config.build()));
+            this.vault = tryLoginWithFallback(loginContext, config);
 
-            if (token == null || token.trim().isEmpty()) {
-                logger.debug("Token is null or empty, using cert auth method");
-                final AuthResponse authResponse = this.vault.auth().loginByCert();
-                if (authResponse == null) {
-                    throw new VaultException("Authentication using client certificates failed! Token was not provided.");
-                }
-                //use received token for further authentication
-                config.token(authResponse.getAuthClientToken());
-                //new instance will use set token
-                this.vault = Vault.create(config);
-            }
-
-            this.vault.auth().lookupSelf();
             logger.debugf("Vault configuration successful for URL: %s", this.vaultUrl);
         } catch (VaultException e) {
             logger.errorf("Failed to configure Vault connection to %s: %s", this.vaultUrl, e.getMessage());
@@ -71,6 +74,49 @@ public class VaultConnector {
         }
     }
 
+    /**
+     * Login with subsequently with each possible method and stop when login was successful. Resulting Vault will carry
+     * VaultConfig with token which obtained from the final login attempt.
+     * Note that only methods which prerequisites are satisfied will be tried.
+     * @param loginContext current login context
+     * @param config initial VaultConfig
+     * @return Vault with token configured
+     * @throws VaultException thrown when anything goes wrong, including situation when all methods fail.
+     */
+    private Vault tryLoginWithFallback(LoginContext loginContext, VaultConfig config) throws VaultException {
+        for (VaultLoginStrategy strategy : composePossibleLoginStrategiesPrioritized(loginContext, config.getSslConfig())) {
+            try {
+                String response = strategy.tryLogin(loginContext);
+
+                if (response != null) {
+                    config.token(response);
+                    Vault vault = Vault.create(config.build());
+                    //test that token can be used to perform anything requiring authentication
+                    vault.auth().lookupSelf();
+                    return vault;
+                }
+            } catch (VaultException e) {
+                logger.debugf(e, "Unable to login with %s", strategy.getClass().getSimpleName());
+            }
+        }
+
+        throw new VaultException("All login strategies failed");
+    }
+
+    private List<VaultLoginStrategy> composePossibleLoginStrategiesPrioritized(final LoginContext loginContext,
+                                                                               final SslConfig sslConfig) {
+        final List<VaultLoginStrategy> loginStrategies = new ArrayList<>();
+        if (sslConfig != null) {
+            loginStrategies.add(new ClientCertificateLoginStrategy());
+        }
+        if (loginContext.getJwtConfig() != null) {
+            loginStrategies.add(new JwtLoginStrategy());
+        }
+        if (loginContext.getToken() != null) {
+            loginStrategies.add(new TokenLoginStrategy());
+        }
+        return loginStrategies;
+    }
 
     /**
      * Retrieve a secret from Vault
