@@ -28,6 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.wildfly.security.hashicorp.vault.VaultTestUtils.startVaultTestContainer;
@@ -340,6 +341,51 @@ public class HashicorpVaultCredentialStoreTestCase {
         assertEquals(1, aliases.size());
         assertTrue(aliases.contains("secret/app1.key1") || aliases.contains("secret/app1.key2"));
         assertFalse(aliases.contains("secret/app1/subapp1.key3"));
+    }
+
+    /**
+     * Second retrieve for the same alias returns the cached credential - same instance.
+     */
+    @Test
+    public void testCredentialCacheHit() throws Exception {
+        vaultTestContainer = startVaultTestContainer();
+        HashicorpVaultCredentialStore store = createHashicorpVaultCredentialStore();
+        PasswordCredential first = store.retrieve("secret/testing1.top_secret", PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR, null, createProtectionParameter("myroot"));
+        assertNotNull(first);
+        assertEquals("password123", String.valueOf(first.getPassword(ClearPassword.class).getPassword()));
+        PasswordCredential second = store.retrieve("secret/testing1.top_secret", PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR, null, createProtectionParameter("myroot"));
+        assertSame(first, second);
+    }
+
+    /**
+     * After store, cache is updated so subsequent retrieve returns the new value.
+     */
+    @Test
+    public void testCredentialCacheInvalidationOnStore() throws Exception {
+        vaultTestContainer = startVaultTestContainer();
+        HashicorpVaultCredentialStore store = createHashicorpVaultCredentialStore();
+        store.store("secret/cachetest.key1", createCredentialFromPassword("value1"), null);
+        PasswordCredential c1 = store.retrieve("secret/cachetest.key1", PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR, null, createProtectionParameter("myroot"));
+        assertEquals("value1", String.valueOf(c1.getPassword(ClearPassword.class).getPassword()));
+        store.store("secret/cachetest.key1", createCredentialFromPassword("value2"), null);
+        PasswordCredential c2 = store.retrieve("secret/cachetest.key1", PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR, null, createProtectionParameter("myroot"));
+        assertEquals("value2", String.valueOf(c2.getPassword(ClearPassword.class).getPassword()));
+    }
+
+    /**
+     * After remove, cache is invalidated so subsequent retrieve for that alias returns null.
+     */
+    @Test
+    public void testCredentialCacheInvalidationOnRemove() throws Exception {
+        vaultTestContainer = startVaultTestContainer();
+        HashicorpVaultCredentialStore store = createHashicorpVaultCredentialStore();
+        store.store("secret/cachetest.a", createCredentialFromPassword("a"), null);
+        store.store("secret/cachetest.b", createCredentialFromPassword("b"), null);
+        store.retrieve("secret/cachetest.a", PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR, null, createProtectionParameter("myroot"));
+        store.remove("secret/cachetest.a", PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR, null);
+        assertNull(store.retrieve("secret/cachetest.a", PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR, null, createProtectionParameter("myroot")));
+        PasswordCredential b = store.retrieve("secret/cachetest.b", PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR, null, createProtectionParameter("myroot"));
+        assertEquals("b", String.valueOf(b.getPassword(ClearPassword.class).getPassword()));
     }
 
     private HashicorpVaultCredentialStore createHashicorpVaultCredentialStore() throws Exception {
