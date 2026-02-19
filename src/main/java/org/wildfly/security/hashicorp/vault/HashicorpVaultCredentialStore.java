@@ -10,16 +10,19 @@ import org.wildfly.security.credential.Credential;
 import org.wildfly.security.credential.PasswordCredential;
 import org.wildfly.security.credential.source.CredentialSource;
 import org.wildfly.security.credential.store.CredentialStore;
+import org.wildfly.security.credential.store.CredentialStoreExtension;
 import org.wildfly.security.credential.store.CredentialStoreException;
 import org.wildfly.security.credential.store.CredentialStoreSpi;
 import org.wildfly.security.credential.store.UnsupportedCredentialTypeException;
 import org.wildfly.security.password.interfaces.ClearPassword;
 
+import javax.net.ssl.SSLContext;
 import java.io.IOException;
 import java.security.KeyStore;
 import java.security.Provider;
 import java.security.spec.AlgorithmParameterSpec;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -32,6 +35,8 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
 
     private static final int DEFAULT_MAX_ALIASES = 10_000;
     private static final int DEFAULT_MAX_DEPTH = 100;
+    private static List<Class<? extends CredentialStoreExtension>> SUPPORTED_EXTENSION_TYPES =
+            List.of(HashicorpVaultCredentialStoreExtension.class);
 
     String hostAddress;
     String namespace;
@@ -42,6 +47,7 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
     private String keyStorePath;
     private String keyStorePass;
     private String trustStorePass;
+    private SSLContext sslContext;
 
     @Override
     public void initialize(Map<String, String> attributes, CredentialStore.ProtectionParameter protectionParameter, Provider[] providers) throws CredentialStoreException {
@@ -117,7 +123,7 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
                 }
             }
 
-            vaultConnector = new VaultConnector(this.hostAddress, token, this.namespace, sslConfig, true);
+            vaultConnector = new VaultConnector(this.hostAddress, token, this.namespace, sslConfig, true, sslContext);
             vaultConnector.configure();
             
             initialized = true;
@@ -126,6 +132,10 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
         } catch (VaultException e) {
             throw new CredentialStoreException("Failed to configure vault connection", e);
         }
+    }
+
+    public void setSslContext(SSLContext sslContext) {
+        this.sslContext = sslContext;
     }
 
     @Override
@@ -319,6 +329,47 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
         }
         return collectAliases(normalizePath(path), recursive, recursiveDepth, maxNumberOfAliases);
     }
+
+    private final HashicorpVaultCredentialStoreExtension credentialStoreExtension = new HashicorpVaultCredentialStoreExtension() {
+        @Override
+        public void setSslContext(SSLContext sslContext) {
+            HashicorpVaultCredentialStore.this.setSslContext(sslContext);
+        }
+
+        @Override
+        public Set<String> getAliases(String path) throws CredentialStoreException {
+            return HashicorpVaultCredentialStore.this.getAliases(path);
+        }
+
+        @Override
+        public Set<String> getAliases(String path, boolean recursive) throws CredentialStoreException {
+            return HashicorpVaultCredentialStore.this.getAliases(path, recursive);
+        }
+
+        @Override
+        public Set<String> getAliases(String path, boolean recursive, int recursiveDepth) throws CredentialStoreException {
+            return HashicorpVaultCredentialStore.this.getAliases(path, recursive, recursiveDepth);
+        }
+
+        @Override
+        public Set<String> getAliases(String path, boolean recursive, int recursiveDepth, int maxNumberOfAliases) throws CredentialStoreException {
+            return HashicorpVaultCredentialStore.this.getAliases(path, recursive, recursiveDepth, maxNumberOfAliases);
+        }
+    };
+
+    @Override
+    public <C extends CredentialStoreExtension> C getExtensionInstance(final Class<C> extensionType) {
+        if (extensionType != null && extensionType.isInstance(credentialStoreExtension)) {
+            return extensionType.cast(credentialStoreExtension);
+        }
+        return null;
+    }
+
+    @Override
+    public List<Class<? extends CredentialStoreExtension>> getSupportedExtensionTypes() {
+        return SUPPORTED_EXTENSION_TYPES;
+    }
+
 
     private Set<String> collectAliases(String path, boolean recursive, int maxDepth) throws CredentialStoreException {
         return collectAliases(path, recursive, maxDepth, DEFAULT_MAX_ALIASES);

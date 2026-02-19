@@ -4,6 +4,7 @@
  */
 package org.wildfly.security.hashicorp.vault;
 
+import java.net.http.HttpClient;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -23,6 +24,8 @@ import org.wildfly.security.hashicorp.vault.loginstrategy.LoginContext;
 import org.wildfly.security.hashicorp.vault.loginstrategy.TokenLoginStrategy;
 import org.wildfly.security.hashicorp.vault.loginstrategy.VaultLoginStrategy;
 
+import javax.net.ssl.SSLContext;
+
 /**
  * Vault Connector
  */
@@ -35,29 +38,49 @@ public class VaultConnector {
     private final String namespace;
     private final SslConfig sslConfig;
     private Vault vault;
+    private final SSLContext sslContext;
 
     private JwtConfig jwtConfig;
 
     public VaultConnector(String vaultUrl, String token, String namespace, SslConfig sslConfig, boolean sslVerify) {
+        this(vaultUrl, token, namespace, sslConfig, sslVerify, null);
+    }
+
+    public VaultConnector(String vaultUrl, String token, String namespace, SslConfig sslConfig, boolean sslVerify, SSLContext sslContext) {
         this.vaultUrl = vaultUrl;
         this.token = token;
         this.namespace = namespace;
         this.sslConfig = sslConfig;
+        this.sslContext = sslContext;
     }
 
     public VaultConnector(String vaultUrl, JwtConfig jwtConfig, String namespace, SslConfig sslConfig) {
+        this(vaultUrl, jwtConfig, namespace, sslConfig, null);
+    }
+
+    public VaultConnector(String vaultUrl, JwtConfig jwtConfig, String namespace, SslConfig sslConfig, SSLContext sslContext) {
         this.vaultUrl = vaultUrl;
         this.token = null;
         this.namespace = namespace;
         this.sslConfig = sslConfig;
         this.jwtConfig = jwtConfig;
+        this.sslContext = sslContext;
     }
 
     public void configure() throws VaultException {
         try {
+
             VaultConfig config = new VaultConfig()
                     .sslConfig(this.sslConfig)
                     .address(this.vaultUrl);
+            HttpClient httpClient;
+
+            if (sslContext != null) {
+                httpClient = HttpClient.newBuilder()
+                        .sslContext(sslContext)
+                        .build();
+                config.httpClient(httpClient);
+            }
 
             if (this.namespace != null && !this.namespace.isEmpty()) {
                 config.nameSpace(this.namespace);
