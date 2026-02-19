@@ -131,6 +131,21 @@ Run the above in the folder where you have your server certificate and private k
 /subsystem=elytron/credential-store=vault_store:add(providers=vaultProviderLoader,implementation-properties={host-address="https://localhost:9200", trustStorePath="/path/to/client.truststore.jks"},type=HashicorpVaultCredentialStore,credential-reference={clear-text="myroot"})
 ```
 
+## Using Podman instead of Docker
+
+To use Podman instead of Docker on Linux:
+
+Start the Podman daemon in the background:
+```bash
+$ systemctl --user start podman.socket &
+```
+
+Set the DOCKER_HOST environmental variable:
+```bash
+$ export DOCKER_HOST=unix://$XDG_RUNTIME_DIR/podman/podman.sock
+```
+See https://podman-desktop.io/tutorial/testcontainers-with-podman for more details.
+
 ## License
 
 Licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
