@@ -20,6 +20,8 @@ import java.security.KeyStore;
 import java.security.Provider;
 import java.security.spec.AlgorithmParameterSpec;
 import java.util.HashSet;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 
@@ -32,6 +34,8 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
 
     private static final int DEFAULT_MAX_ALIASES = 10_000;
     private static final int DEFAULT_MAX_DEPTH = 100;
+    /** Default maximum number of credentials to keep in the in-memory cache. */
+    private static final int DEFAULT_CREDENTIAL_CACHE_MAX_SIZE = 500;
 
     String hostAddress;
     String namespace;
@@ -42,6 +46,9 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
     private String keyStorePath;
     private String keyStorePass;
     private String trustStorePass;
+
+    /** In-memory LRU cache of retrieved credentials, keyed by credential alias (e.g. "path.key"). */
+    private Map<String, Credential> credentialCache;
 
     @Override
     public void initialize(Map<String, String> attributes, CredentialStore.ProtectionParameter protectionParameter, Provider[] providers) throws CredentialStoreException {
@@ -74,7 +81,14 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
         this.namespace = attributes.get("namespace");
         this.protectionParameter = protectionParameter;
         this.providers = providers;
-        
+
+        this.credentialCache = Collections.synchronizedMap(new LinkedHashMap<String, Credential>(16, 0.75f, true) {
+            @Override
+            protected boolean removeEldestEntry(Map.Entry<String, Credential> eldest) {
+                return size() > DEFAULT_CREDENTIAL_CACHE_MAX_SIZE;
+            }
+        });
+
         try {
             char[] password = getStorePassword(protectionParameter);
             String token = password != null ? String.valueOf(password) : null;
@@ -157,6 +171,7 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
                 throw new CredentialStoreException("Failed to extract password from credential");
             }
             vaultConnector.putSecret(aliasSplit[0], aliasSplit[1], new String(chars));
+            putInCredentialCache(credentialAlias, credential);
         } catch (VaultException e) {
             throw new CredentialStoreException("Failed to store credential in vault", e);
         } catch (ClassCastException e) {
@@ -178,6 +193,14 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
         if (aliasSplit.length != 2) {
             throw new CredentialStoreException("Credential alias must be in format 'path.key', got: " + credentialAlias);
         }
+
+        Credential cached;
+        synchronized (credentialCache) {
+            cached = credentialCache.get(credentialAlias);
+        }
+        if (credentialType.isInstance(cached)) {
+            return credentialType.cast(cached);
+        }
         
         try {
             CredentialSource credentialSource = new VaultCredentialSource(vaultConnector, aliasSplit[0], aliasSplit[1]);
@@ -185,6 +208,7 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
             if (credential == null) {
                 return null; // Secret not found or key not found in secret
             }
+            putInCredentialCache(credentialAlias, credential);
             return credentialType.cast(credential);
         } catch (IOException e) {
             throw new CredentialStoreException("Failed to retrieve credential from vault", e);
@@ -210,8 +234,18 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
         
         try {
             vaultConnector.removeSecret(aliasSplit[0], aliasSplit[1]);
+            synchronized (credentialCache) {
+                // we need to remove whole path because that is how the vault's removeSecret operation works
+                credentialCache.keySet().removeIf(k -> k.equals(credentialAlias) || k.startsWith(aliasSplit[0] + "."));
+            }
         } catch (VaultException e) {
             throw new CredentialStoreException("Failed to remove credential from vault", e);
+        }
+    }
+
+    private void putInCredentialCache(String alias, Credential credential) {
+        synchronized (credentialCache) {
+            credentialCache.put(alias, credential);
         }
     }
 
