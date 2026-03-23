@@ -107,7 +107,7 @@ public class VaultConnector {
      * @throws VaultException thrown when anything goes wrong, including situation when all methods fail.
      */
     private Vault tryLoginWithFallback(LoginContext loginContext, VaultConfig config) throws VaultException {
-        for (VaultLoginStrategy strategy : composePossibleLoginStrategiesPrioritized(loginContext, config.getSslConfig())) {
+        for (VaultLoginStrategy strategy : composePossibleLoginStrategiesPrioritized(loginContext)) {
             try {
                 String response = strategy.tryLogin(loginContext);
 
@@ -126,10 +126,9 @@ public class VaultConnector {
         throw new VaultException("All login strategies failed");
     }
 
-    private List<VaultLoginStrategy> composePossibleLoginStrategiesPrioritized(final LoginContext loginContext,
-                                                                               final SslConfig sslConfig) {
+    private List<VaultLoginStrategy> composePossibleLoginStrategiesPrioritized(final LoginContext loginContext) {
         final List<VaultLoginStrategy> loginStrategies = new ArrayList<>();
-        if (sslConfig != null) {
+        if (!hasNonEmptyToken(loginContext)) {
             loginStrategies.add(new ClientCertificateLoginStrategy());
         }
         if (loginContext.getJwtConfig() != null) {
@@ -139,6 +138,11 @@ public class VaultConnector {
             loginStrategies.add(new TokenLoginStrategy());
         }
         return loginStrategies;
+    }
+
+    private static boolean hasNonEmptyToken(final LoginContext loginContext) {
+        final String t = loginContext.getToken();
+        return t != null && !t.trim().isEmpty();
     }
 
     /**
