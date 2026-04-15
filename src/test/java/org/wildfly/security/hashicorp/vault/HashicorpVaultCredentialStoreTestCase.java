@@ -6,6 +6,9 @@ package org.wildfly.security.hashicorp.vault;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.testcontainers.vault.VaultContainer;
 import org.wildfly.security.auth.server.IdentityCredentials;
 import org.wildfly.security.credential.PasswordCredential;
@@ -410,5 +413,146 @@ public class HashicorpVaultCredentialStoreTestCase {
     private CredentialStore.CredentialSourceProtectionParameter createProtectionParameter(String protectionParameter) throws UnsupportedCredentialTypeException {
         return new CredentialStore.CredentialSourceProtectionParameter(
                 IdentityCredentials.NONE.withCredential(createCredentialFromPassword(protectionParameter)));
+    }
+
+    // =====================================================================
+    // Input validation — store()/retrieve()/remove() alias and argument checks
+    // =====================================================================
+
+    /**
+     * Call {@code store()} with null, empty, or blank alias on an initialized store.
+     * Test passes when {@link CredentialStoreException} is thrown for each invalid value.
+     */
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {"   ", "\t"})
+    public void testStoreInvalidAlias(String alias) throws Exception {
+        vaultTestContainer = startVaultTestContainer();
+        HashicorpVaultCredentialStore store = createHashicorpVaultCredentialStore();
+        assertThrows(CredentialStoreException.class,
+                () -> store.store(alias, createCredentialFromPassword("v"), null));
+    }
+
+    /**
+     * Call {@code store()} with an alias that does not match the required "path.key" format.
+     * Test passes when {@link CredentialStoreException} is thrown.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"noDotsHere", "too.many.dots"})
+    public void testStoreMalformedAlias(String alias) throws Exception {
+        vaultTestContainer = startVaultTestContainer();
+        HashicorpVaultCredentialStore store = createHashicorpVaultCredentialStore();
+        assertThrows(CredentialStoreException.class,
+                () -> store.store(alias, createCredentialFromPassword("v"), null));
+    }
+
+    /**
+     * Call {@code store()} with a {@code null} credential.
+     * Test passes when {@link CredentialStoreException} is thrown.
+     */
+    @Test
+    public void testStoreNullCredential() throws Exception {
+        vaultTestContainer = startVaultTestContainer();
+        HashicorpVaultCredentialStore store = createHashicorpVaultCredentialStore();
+        assertThrows(CredentialStoreException.class,
+                () -> store.store("secret/path.key", null, null));
+    }
+
+    /**
+     * Call {@code retrieve()} with null, empty, or blank alias on an initialized store.
+     * Test passes when {@link CredentialStoreException} is thrown for each invalid value.
+     */
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {"   ", "\t"})
+    public void testRetrieveInvalidAlias(String alias) throws Exception {
+        vaultTestContainer = startVaultTestContainer();
+        HashicorpVaultCredentialStore store = createHashicorpVaultCredentialStore();
+        assertThrows(CredentialStoreException.class,
+                () -> store.retrieve(alias, PasswordCredential.class,
+                        ClearPassword.ALGORITHM_CLEAR, null, null));
+    }
+
+    /**
+     * Call {@code retrieve()} with an alias that does not match the "path.key" format.
+     * Test passes when {@link CredentialStoreException} is thrown.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"noDotsHere", "too.many.dots"})
+    public void testRetrieveMalformedAlias(String alias) throws Exception {
+        vaultTestContainer = startVaultTestContainer();
+        HashicorpVaultCredentialStore store = createHashicorpVaultCredentialStore();
+        assertThrows(CredentialStoreException.class,
+                () -> store.retrieve(alias, PasswordCredential.class,
+                        ClearPassword.ALGORITHM_CLEAR, null, null));
+    }
+
+    /**
+     * Call {@code remove()} with null, empty, or blank alias on an initialized store.
+     * Test passes when {@link CredentialStoreException} is thrown for each invalid value.
+     */
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {"   ", "\t"})
+    public void testRemoveInvalidAlias(String alias) throws Exception {
+        vaultTestContainer = startVaultTestContainer();
+        HashicorpVaultCredentialStore store = createHashicorpVaultCredentialStore();
+        assertThrows(CredentialStoreException.class,
+                () -> store.remove(alias, PasswordCredential.class,
+                        ClearPassword.ALGORITHM_CLEAR, null));
+    }
+
+    /**
+     * Call {@code remove()} with an alias that does not match the "path.key" format.
+     * Test passes when {@link CredentialStoreException} is thrown.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"noDotsHere", "too.many.dots"})
+    public void testRemoveMalformedAlias(String alias) throws Exception {
+        vaultTestContainer = startVaultTestContainer();
+        HashicorpVaultCredentialStore store = createHashicorpVaultCredentialStore();
+        assertThrows(CredentialStoreException.class,
+                () -> store.remove(alias, PasswordCredential.class,
+                        ClearPassword.ALGORITHM_CLEAR, null));
+    }
+
+    // =====================================================================
+    // Input validation — getAliases() parameter checks
+    // =====================================================================
+
+    /**
+     * Call {@code getAliases(path, recursive, depth)} with a negative recursiveDepth.
+     * Test passes when {@link CredentialStoreException} is thrown.
+     */
+    @Test
+    public void testGetAliasesNegativeDepth() throws Exception {
+        vaultTestContainer = startVaultTestContainer();
+        HashicorpVaultCredentialStore store = createHashicorpVaultCredentialStore();
+        assertThrows(CredentialStoreException.class,
+                () -> store.getAliases("secret/", true, -1));
+    }
+
+    /**
+     * Call {@code getAliases(path, recursive, depth, max)} with zero maxNumberOfAliases.
+     * Test passes when {@link CredentialStoreException} is thrown.
+     */
+    @Test
+    public void testGetAliasesZeroMax() throws Exception {
+        vaultTestContainer = startVaultTestContainer();
+        HashicorpVaultCredentialStore store = createHashicorpVaultCredentialStore();
+        assertThrows(CredentialStoreException.class,
+                () -> store.getAliases("secret/", true, 1, 0));
+    }
+
+    /**
+     * Call {@code getAliases(path, recursive, depth, max)} with negative maxNumberOfAliases.
+     * Test passes when {@link CredentialStoreException} is thrown.
+     */
+    @Test
+    public void testGetAliasesNegativeMax() throws Exception {
+        vaultTestContainer = startVaultTestContainer();
+        HashicorpVaultCredentialStore store = createHashicorpVaultCredentialStore();
+        assertThrows(CredentialStoreException.class,
+                () -> store.getAliases("secret/", true, 1, -5));
     }
 }
