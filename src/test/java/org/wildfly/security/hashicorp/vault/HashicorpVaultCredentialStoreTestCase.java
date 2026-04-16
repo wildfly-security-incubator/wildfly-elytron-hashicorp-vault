@@ -596,4 +596,153 @@ public class HashicorpVaultCredentialStoreTestCase {
         assertThrows(CredentialStoreException.class,
                 () -> store.getAliases("secret/", true, 1));
     }
+
+    // =====================================================================
+    // Initialization — null/missing attributes, protection parameter checks
+    // =====================================================================
+
+    /**
+     * Call {@code initialize()} with {@code null} attributes map.
+     * Test passes when {@link CredentialStoreException} is thrown.
+     */
+    @Test
+    public void testInitializeWithNullAttributes() {
+        HashicorpVaultCredentialStore store = new HashicorpVaultCredentialStore();
+        assertThrows(CredentialStoreException.class,
+                () -> store.initialize(null, createProtectionParameter("token"), new Provider[]{}));
+    }
+
+    /**
+     * Call {@code initialize()} with attributes map that does not contain host-address.
+     * Test passes when {@link CredentialStoreException} is thrown.
+     */
+    @Test
+    public void testInitializeWithMissingHostAddress() {
+        HashicorpVaultCredentialStore store = new HashicorpVaultCredentialStore();
+        Map<String, String> attrs = new HashMap<>();
+        assertThrows(CredentialStoreException.class,
+                () -> store.initialize(attrs, createProtectionParameter("token"), new Provider[]{}));
+    }
+
+    /**
+     * Call {@code initialize()} with blank host-address value.
+     * Test passes when {@link CredentialStoreException} is thrown.
+     */
+    @Test
+    public void testInitializeWithBlankHostAddress() {
+        HashicorpVaultCredentialStore store = new HashicorpVaultCredentialStore();
+        Map<String, String> attrs = new HashMap<>();
+        attrs.put("host-address", "   ");
+        assertThrows(CredentialStoreException.class,
+                () -> store.initialize(attrs, createProtectionParameter("token"), new Provider[]{}));
+    }
+
+    /**
+     * Call {@code initialize()} with {@code null} protection parameter (no token provided).
+     * Test passes when {@link CredentialStoreException} is thrown indicating token is required.
+     */
+    @Test
+    public void testInitializeWithNullProtectionParameter() {
+        HashicorpVaultCredentialStore store = new HashicorpVaultCredentialStore();
+        Map<String, String> attrs = new HashMap<>();
+        attrs.put("host-address", "http://localhost:8200");
+        assertThrows(CredentialStoreException.class,
+                () -> store.initialize(attrs, null, new Provider[]{}));
+    }
+
+    /**
+     * Call {@code initialize()} with an unsupported {@link CredentialStore.ProtectionParameter} type.
+     * Test passes when an exception is thrown indicating the protection parameter is invalid.
+     */
+    @Test
+    public void testInitializeWithUnsupportedProtectionParameterType() {
+        HashicorpVaultCredentialStore store = new HashicorpVaultCredentialStore();
+        Map<String, String> attrs = new HashMap<>();
+        attrs.put("host-address", "http://localhost:8200");
+        CredentialStore.ProtectionParameter invalidParam = new CredentialStore.ProtectionParameter() {};
+        assertThrows(CredentialStoreException.class,
+                () -> store.initialize(attrs, invalidParam, new Provider[]{}));
+    }
+
+    /**
+     * Call {@code initialize()} with a non-existent key-store-path.
+     * Test passes when {@link CredentialStoreException} is thrown with "Failed to load KeyStore" message.
+     */
+    @Test
+    public void testInitializeWithInvalidKeyStorePath() {
+        HashicorpVaultCredentialStore store = new HashicorpVaultCredentialStore();
+        Map<String, String> attrs = new HashMap<>();
+        attrs.put("host-address", "http://localhost:8200");
+        attrs.put("key-store-path", "/nonexistent/path/keystore.jks");
+        CredentialStoreException ex = assertThrows(CredentialStoreException.class,
+                () -> store.initialize(attrs, createProtectionParameter("token"), new Provider[]{}));
+        assertTrue(ex.getMessage().contains("Failed to load KeyStore"),
+                "Expected 'Failed to load KeyStore' in message, got: " + ex.getMessage());
+    }
+
+    /**
+     * Call {@code initialize()} with a non-existent trust-store-path.
+     * Test passes when {@link CredentialStoreException} is thrown with "Failed to load TrustStore" message.
+     */
+    @Test
+    public void testInitializeWithInvalidTrustStorePath() {
+        HashicorpVaultCredentialStore store = new HashicorpVaultCredentialStore();
+        Map<String, String> attrs = new HashMap<>();
+        attrs.put("host-address", "http://localhost:8200");
+        attrs.put("trust-store-path", "/nonexistent/path/truststore.jks");
+        CredentialStoreException ex = assertThrows(CredentialStoreException.class,
+                () -> store.initialize(attrs, createProtectionParameter("token"), new Provider[]{}));
+        assertTrue(ex.getMessage().contains("Failed to load TrustStore"),
+                "Expected 'Failed to load TrustStore' in message, got: " + ex.getMessage());
+    }
+
+    // =====================================================================
+    // Not initialized — operations on a store that was never initialized
+    // =====================================================================
+
+    /**
+     * Call {@code store()} on a credential store that has not been initialized.
+     * Test passes when {@link CredentialStoreException} is thrown.
+     */
+    @Test
+    public void testStoreNotInitialized() {
+        HashicorpVaultCredentialStore store = new HashicorpVaultCredentialStore();
+        assertThrows(CredentialStoreException.class,
+                () -> store.store("secret/path.key", createCredentialFromPassword("v"), null));
+    }
+
+    /**
+     * Call {@code retrieve()} on a credential store that has not been initialized.
+     * Test passes when {@link CredentialStoreException} is thrown.
+     */
+    @Test
+    public void testRetrieveNotInitialized() {
+        HashicorpVaultCredentialStore store = new HashicorpVaultCredentialStore();
+        assertThrows(CredentialStoreException.class,
+                () -> store.retrieve("secret/path.key", PasswordCredential.class,
+                        ClearPassword.ALGORITHM_CLEAR, null, null));
+    }
+
+    /**
+     * Call {@code remove()} on a credential store that has not been initialized.
+     * Test passes when {@link CredentialStoreException} is thrown.
+     */
+    @Test
+    public void testRemoveNotInitialized() {
+        HashicorpVaultCredentialStore store = new HashicorpVaultCredentialStore();
+        assertThrows(CredentialStoreException.class,
+                () -> store.remove("secret/path.key", PasswordCredential.class,
+                        ClearPassword.ALGORITHM_CLEAR, null));
+    }
+
+    /**
+     * Call {@code getAliases(path)} on a credential store that has not been initialized.
+     * Test passes when {@link CredentialStoreException} is thrown.
+     */
+    @Test
+    public void testGetAliasesNotInitialized() {
+        HashicorpVaultCredentialStore store = new HashicorpVaultCredentialStore();
+        assertThrows(CredentialStoreException.class,
+                () -> store.getAliases("secret/"));
+    }
 }
