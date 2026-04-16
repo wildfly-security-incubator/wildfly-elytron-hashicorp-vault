@@ -555,4 +555,45 @@ public class HashicorpVaultCredentialStoreTestCase {
         assertThrows(CredentialStoreException.class,
                 () -> store.getAliases("secret/", true, 1, -5));
     }
+
+    // =====================================================================
+    // Error response handling — 403 propagation through getAliases
+    // =====================================================================
+
+    /**
+     * Recursive alias listing with a restricted token that cannot list subpaths.
+     * Test passes when {@link CredentialStoreException} is thrown with a "Forbidden" message,
+     * verifying that HTTP 403 from Vault is properly propagated through
+     * {@code collectAliasesRecursive}.
+     */
+    @Test
+    public void testGetAliasesRecursiveForbiddenToListSubpaths() throws Exception {
+        vaultTestContainer = new VaultContainer<>("hashicorp/vault:1.13")
+                .withVaultToken("myroot")
+                .withInitCommand(
+                        "secrets enable transit",
+                        "write -f transit/keys/my-key",
+                        "kv put secret/testing1 top_secret=password123",
+                        "kv put secret/testing2 dbuser=secretpass jmsuser=jmspass"
+                );
+        vaultTestContainer.start();
+
+        // Create a policy that allows reading secrets but NOT listing metadata
+        vaultTestContainer.execInContainer("sh", "-c",
+                "echo 'path \"secret/data/*\" { capabilities = [\"read\"] }' "
+                        + "| vault policy write no-list -");
+        vaultTestContainer.execInContainer("vault", "token", "create",
+                "-policy=no-list", "-id=no-list-token", "-ttl=1h");
+
+        HashicorpVaultCredentialStore store = new HashicorpVaultCredentialStore();
+        Map<String, String> attributes = new HashMap<>();
+        attributes.put("host-address", vaultTestContainer.getHttpHostAddress());
+        attributes.put("namespace", "admin");
+        store.initialize(attributes, new CredentialStore.CredentialSourceProtectionParameter(
+                        IdentityCredentials.NONE.withCredential(createCredentialFromPassword("no-list-token"))),
+                new Provider[]{WildFlyElytronPasswordProvider.getInstance()});
+
+        assertThrows(CredentialStoreException.class,
+                () -> store.getAliases("secret/", true, 1));
+    }
 }
