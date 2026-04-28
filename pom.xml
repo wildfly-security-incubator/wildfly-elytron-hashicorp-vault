@@ -25,6 +25,10 @@
         <jdk.min.version>25</jdk.min.version>
         <maven.compiler.release>17</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        
+        <!-- Test JDK selection (for multi-version testing with toolchains) -->
+        <jdk.test.version>25</jdk.test.version>
+        <jdk.test.vendor>temurin</jdk.test.vendor>
         <version.wildfly.elytron>2.8.3.Final</version.wildfly.elytron>
         <version.vault.java.driver>6.2.1</version.vault.java.driver>
         <version.metainf-services>1.11</version.metainf-services>
@@ -168,6 +172,11 @@
                         <includes>
                             <include>**/*TestCase.java</include>
                         </includes>
+                        <!-- Toolchains support for multi-version testing -->
+                        <jdkToolchain>
+                            <version>${jdk.test.version}</version>
+                            <vendor>${jdk.test.vendor}</vendor>
+                        </jdkToolchain>
                     </configuration>
                 </plugin>
 
