@@ -174,8 +174,9 @@ jobs:
           export JAVA_HOME="${JAVA_HOME_25_TEMURIN}"
           mvn clean install -DskipTests -B -V
       
-      # 5. Run tests with Java 17 (Temurin)
+      # 5. Run tests with Java 17 (Temurin) - Linux only (Testcontainers requires Docker)
       - name: Test with Java 17 (Temurin)
+        if: runner.os == 'Linux'
         id: test-java17-temurin
         shell: bash
         timeout-minutes: 30
@@ -199,8 +200,9 @@ jobs:
           path: '**/target/surefire-reports/**'
           retention-days: 30
       
-      # 6. Run tests with Java 17 (Semeru)
+      # 6. Run tests with Java 17 (Semeru) - Linux only (Testcontainers requires Docker)
       - name: Test with Java 17 (Semeru)
+        if: runner.os == 'Linux'
         id: test-java17-semeru
         shell: bash
         timeout-minutes: 30
@@ -224,8 +226,9 @@ jobs:
           path: '**/target/surefire-reports/**'
           retention-days: 30
       
-      # 7. Run tests with Java 21 (Temurin)
+      # 7. Run tests with Java 21 (Temurin) - Linux only (Testcontainers requires Docker)
       - name: Test with Java 21 (Temurin)
+        if: runner.os == 'Linux'
         id: test-java21-temurin
         shell: bash
         timeout-minutes: 30
@@ -249,8 +252,9 @@ jobs:
           path: '**/target/surefire-reports/**'
           retention-days: 30
       
-      # 8. Run tests with Java 21 (Semeru)
+      # 8. Run tests with Java 21 (Semeru) - Linux only (Testcontainers requires Docker)
       - name: Test with Java 21 (Semeru)
+        if: runner.os == 'Linux'
         id: test-java21-semeru
         shell: bash
         timeout-minutes: 30
@@ -274,8 +278,9 @@ jobs:
           path: '**/target/surefire-reports/**'
           retention-days: 30
       
-      # 9. Run tests with Java 25 (Temurin)
+      # 9. Run tests with Java 25 (Temurin) - Linux only (Testcontainers requires Docker)
       - name: Test with Java 25 (Temurin)
+        if: runner.os == 'Linux'
         id: test-java25-temurin
         shell: bash
         timeout-minutes: 30
@@ -299,8 +304,9 @@ jobs:
           path: '**/target/surefire-reports/**'
           retention-days: 30
       
-      # 10. Run tests with Java 25 (Semeru)
+      # 10. Run tests with Java 25 (Semeru) - Linux only (Testcontainers requires Docker)
       - name: Test with Java 25 (Semeru)
+        if: runner.os == 'Linux'
         id: test-java25-semeru
         shell: bash
         timeout-minutes: 30
@@ -332,40 +338,46 @@ jobs:
           echo "Checking test results from all permutations..."
           FAILED=0
           
-          if [ "${{ steps.test-java17-temurin.outcome }}" != "success" ]; then
-            echo "❌ Java 17 (Temurin) tests failed"
-            FAILED=1
-          fi
-          
-          if [ "${{ steps.test-java17-semeru.outcome }}" != "success" ]; then
-            echo "❌ Java 17 (Semeru) tests failed"
-            FAILED=1
-          fi
-          
-          if [ "${{ steps.test-java21-temurin.outcome }}" != "success" ]; then
-            echo "❌ Java 21 (Temurin) tests failed"
-            FAILED=1
-          fi
-          
-          if [ "${{ steps.test-java21-semeru.outcome }}" != "success" ]; then
-            echo "❌ Java 21 (Semeru) tests failed"
-            FAILED=1
-          fi
-          
-          if [ "${{ steps.test-java25-temurin.outcome }}" != "success" ]; then
-            echo "❌ Java 25 (Temurin) tests failed"
-            FAILED=1
-          fi
-          
-          if [ "${{ steps.test-java25-semeru.outcome }}" != "success" ]; then
-            echo "❌ Java 25 (Semeru) tests failed"
-            FAILED=1
-          fi
-          
-          if [ $FAILED -eq 1 ]; then
-            echo ""
-            echo "One or more test permutations failed. Check the test result artifacts and logs above."
-            exit 1
+          # Only check test results on Linux (tests are skipped on macOS/Windows due to Docker requirement)
+          if [ "${{ runner.os }}" == "Linux" ]; then
+            if [ "${{ steps.test-java17-temurin.outcome }}" != "success" ]; then
+              echo "❌ Java 17 (Temurin) tests failed"
+              FAILED=1
+            fi
+            
+            if [ "${{ steps.test-java17-semeru.outcome }}" != "success" ]; then
+              echo "❌ Java 17 (Semeru) tests failed"
+              FAILED=1
+            fi
+            
+            if [ "${{ steps.test-java21-temurin.outcome }}" != "success" ]; then
+              echo "❌ Java 21 (Temurin) tests failed"
+              FAILED=1
+            fi
+            
+            if [ "${{ steps.test-java21-semeru.outcome }}" != "success" ]; then
+              echo "❌ Java 21 (Semeru) tests failed"
+              FAILED=1
+            fi
+            
+            if [ "${{ steps.test-java25-temurin.outcome }}" != "success" ]; then
+              echo "❌ Java 25 (Temurin) tests failed"
+              FAILED=1
+            fi
+            
+            if [ "${{ steps.test-java25-semeru.outcome }}" != "success" ]; then
+              echo "❌ Java 25 (Semeru) tests failed"
+              FAILED=1
+            fi
+            
+            if [ $FAILED -eq 1 ]; then
+              echo ""
+              echo "One or more test permutations failed. Check the test result artifacts and logs above."
+              exit 1
+            else
+              echo "✅ All test permutations passed"
+            fi
           else
-            echo "✅ All test permutations passed"
+            echo "ℹ️  Tests skipped on ${{ runner.os }} (Testcontainers requires Docker, only available on Linux runners)"
+            echo "✅ Build successful on ${{ runner.os }}"
           fi
