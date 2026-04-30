@@ -9,7 +9,7 @@
     <parent>
         <groupId>org.jboss</groupId>
         <artifactId>jboss-parent</artifactId>
-        <version>50</version>
+        <version>52</version>
     </parent>
 
     <groupId>org.wildfly.security.hashicorp.vault</groupId>
@@ -22,9 +22,13 @@
 
     <packaging>jar</packaging>
     <properties>
-        <maven.compiler.source>21</maven.compiler.source>
-        <maven.compiler.target>21</maven.compiler.target>
+        <jdk.min.version>25</jdk.min.version>
+        <maven.compiler.release>17</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        
+        <!-- Test JDK selection (for multi-version testing with toolchains) -->
+        <jdk.test.version>25</jdk.test.version>
+        <jdk.test.vendor>temurin</jdk.test.vendor>
         <version.wildfly.elytron>2.8.3.Final</version.wildfly.elytron>
         <version.vault.java.driver>6.2.1</version.vault.java.driver>
         <version.metainf-services>1.11</version.metainf-services>
@@ -168,6 +172,11 @@
                         <includes>
                             <include>**/*TestCase.java</include>
                         </includes>
+                        <!-- Toolchains support for multi-version testing -->
+                        <jdkToolchain>
+                            <version>${jdk.test.version}</version>
+                            <vendor>${jdk.test.vendor}</vendor>
+                        </jdkToolchain>
                     </configuration>
                 </plugin>
 
@@ -203,4 +212,72 @@
             <url>https://repository.jboss.org/nexus/repository/public-jboss/</url>
         </pluginRepository>
     </pluginRepositories>
+
+    <profiles>
+        <!-- Profile for comprehensive multi-version testing -->
+        <!-- Tests with Java 17, 21, and 25 sequentially -->
+        <!-- Usage: mvn install -Ptest-all-versions -->
+        <!-- Optional: mvn install -Ptest-all-versions -Djdk.test.vendor=semeru -->
+        <profile>
+            <id>test-all-versions</id>
+            <properties>
+                <!-- Default to Temurin if vendor not specified -->
+                <jdk.test.vendor>temurin</jdk.test.vendor>
+            </properties>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <executions>
+                            <!-- Test with Java 17 -->
+                            <execution>
+                                <id>test-java-17</id>
+                                <goals>
+                                    <goal>test</goal>
+                                </goals>
+                                <configuration>
+                                    <jdkToolchain>
+                                        <version>17</version>
+                                        <vendor>${jdk.test.vendor}</vendor>
+                                    </jdkToolchain>
+                                    <reportsDirectory>${project.build.directory}/surefire-reports-java17-${jdk.test.vendor}</reportsDirectory>
+                                </configuration>
+                            </execution>
+
+                            <!-- Test with Java 21 -->
+                            <execution>
+                                <id>test-java-21</id>
+                                <goals>
+                                    <goal>test</goal>
+                                </goals>
+                                <configuration>
+                                    <jdkToolchain>
+                                        <version>21</version>
+                                        <vendor>${jdk.test.vendor}</vendor>
+                                    </jdkToolchain>
+                                    <reportsDirectory>${project.build.directory}/surefire-reports-java21-${jdk.test.vendor}</reportsDirectory>
+                                </configuration>
+                            </execution>
+
+                            <!-- Test with Java 25 -->
+                            <execution>
+                                <id>test-java-25</id>
+                                <goals>
+                                    <goal>test</goal>
+                                </goals>
+                                <configuration>
+                                    <jdkToolchain>
+                                        <version>25</version>
+                                        <vendor>${jdk.test.vendor}</vendor>
+                                    </jdkToolchain>
+                                    <reportsDirectory>${project.build.directory}/surefire-reports-java25-${jdk.test.vendor}</reportsDirectory>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

@@ -12,11 +12,58 @@ A credential store implementation for WildFly that integrates with HashiCorp Vau
 
 ## Build the project
 
+### Prerequisites
+
+- Java 25 (or later)
+- Maven 3.9+
+- HashiCorp Vault server (for testing)
+
+### Simple Build and Test
+
+The simplest way to build and test the project:
+
 ```bash
 git clone <repository-url>
 cd wildfly-elytron-hashicorp-vault
 mvn clean install
 ```
+
+This will:
+- Compile the code with Java 25
+- Target Java 17 bytecode (for backward compatibility)
+- Run tests with Java 25
+
+### Multi-Version Testing (Optional)
+
+To test with specific Java versions (17, 21, or 25), you need to set up Maven toolchains:
+
+1. **Install multiple JDK versions**:
+   - Java 17, 21, and 25
+   - Both Temurin and Semeru distributions (for full CI compatibility)
+   - Download from [Adoptium](https://adoptium.net/) or [IBM Semeru](https://developer.ibm.com/languages/java/semeru-runtimes/)
+
+2. **Configure Maven toolchains**:
+   - Copy `toolchains.xml.template` to `~/.m2/toolchains.xml`
+   - Update the `<jdkHome>` paths to match your JDK installations
+   - Verify: `mvn toolchains:display-toolchains`
+
+3. **Test with specific Java version**:
+   ```bash
+   # Test with Java 17
+   mvn clean test -Djdk.test.version=17
+   
+   # Test with Java 21
+   mvn clean test -Djdk.test.version=21
+   
+   # Test with Java 25 (default)
+   mvn clean test -Djdk.test.version=25
+   
+   # Test with specific distribution
+   mvn clean test -Djdk.test.version=21 -Djdk.test.vendor=semeru
+   ```
+
+For more details on multi-version testing, see the [toolchains.xml.template](toolchains.xml.template) file.
+
 # Important
 
 Adding a credential store to the Elytron subsystem is only a preview of what we are working on. Using it this way is not recommended. We are currently developing a dedicated feature pack with a vault subsystem that will offer more configuration options.
