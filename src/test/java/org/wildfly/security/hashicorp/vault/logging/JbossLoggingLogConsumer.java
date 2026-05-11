@@ -4,6 +4,8 @@
  */
 package org.wildfly.security.hashicorp.vault.logging;
 
+import static org.wildfly.security.hashicorp.vault._private.HashiCorpVaultLogger.ROOT_LOGGER;
+
 import org.jboss.logging.Logger;
 import org.testcontainers.containers.output.BaseConsumer;
 import org.testcontainers.containers.output.OutputFrame;
@@ -73,7 +75,7 @@ public class JbossLoggingLogConsumer extends BaseConsumer<JbossLoggingLogConsume
                 }
                 break;
             default:
-                throw new IllegalArgumentException("Unexpected outputType " + outputType);
+                throw ROOT_LOGGER.unexpectedTestContainerOutputType(outputType);
         }
     }
 

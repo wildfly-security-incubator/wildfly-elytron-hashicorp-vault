@@ -4,6 +4,8 @@
  */
 package org.wildfly.security.hashicorp.vault;
 
+import static org.wildfly.security.hashicorp.vault._private.HashiCorpVaultLogger.ROOT_LOGGER;
+
 import java.net.http.HttpClient;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -17,7 +19,6 @@ import io.github.jopenlibs.vault.Vault;
 import io.github.jopenlibs.vault.VaultConfig;
 import io.github.jopenlibs.vault.VaultException;
 import io.github.jopenlibs.vault.response.LogicalResponse;
-import org.jboss.logging.Logger;
 import org.wildfly.security.hashicorp.vault.loginstrategy.ClientCertificateLoginStrategy;
 import org.wildfly.security.hashicorp.vault.loginstrategy.JwtLoginStrategy;
 import org.wildfly.security.hashicorp.vault.loginstrategy.LoginContext;
@@ -30,8 +31,6 @@ import javax.net.ssl.SSLContext;
  * Vault Connector
  */
 public class VaultConnector {
-
-    private static final Logger logger = Logger.getLogger(VaultConnector.class);
 
     private final String vaultUrl;
     private final String token;
@@ -90,9 +89,9 @@ public class VaultConnector {
                     Vault.create(config.build()));
             this.vault = tryLoginWithFallback(loginContext, config);
 
-            logger.debugf("Vault configuration successful for URL: %s", this.vaultUrl);
+            ROOT_LOGGER.vaultConfigurationSuccessful(this.vaultUrl);
         } catch (VaultException e) {
-            logger.errorf("Failed to configure Vault connection to %s: %s", this.vaultUrl, e.getMessage());
+            ROOT_LOGGER.vaultConnectorConfigurationFailed(this.vaultUrl, e);
             throw e;
         }
     }
@@ -119,11 +118,11 @@ public class VaultConnector {
                     return vault;
                 }
             } catch (VaultException e) {
-                logger.debugf(e, "Unable to login with %s", strategy.getClass().getSimpleName());
+                ROOT_LOGGER.vaultLoginAttemptFailed(strategy.getClass().getSimpleName(), e);
             }
         }
 
-        throw new VaultException("All login strategies failed");
+        throw new VaultException(ROOT_LOGGER.vaultAllLoginStrategiesFailed());
     }
 
     private List<VaultLoginStrategy> composePossibleLoginStrategiesPrioritized(final LoginContext loginContext) {
@@ -150,10 +149,10 @@ public class VaultConnector {
      */
     public String getSecret(String path, String key) throws VaultException {
         if (path == null || path.trim().isEmpty()) {
-            throw new VaultException("Path cannot be null or empty");
+            throw new VaultException(ROOT_LOGGER.vaultPathCannotBeNullOrEmpty());
         }
         if (key == null || key.trim().isEmpty()) {
-            throw new VaultException("Key cannot be null or empty");
+            throw new VaultException(ROOT_LOGGER.vaultKeyCannotBeNullOrEmpty());
         }
 
         // Fetch from Vault
@@ -163,22 +162,22 @@ public class VaultConnector {
             Map<String, String> data = response.getData();
             String value = data.get(key);
             if (value != null) {
-                logger.tracef("Vault retrieved secret successfully from path: %s, url: %s", path, this.vaultUrl);
+                ROOT_LOGGER.vaultRetrievedSecret(path, this.vaultUrl);
             } else {
-                logger.tracef("Key '%s' not found in secret at path: %s", key, path);
+                ROOT_LOGGER.vaultKeyNotFoundInSecret(key, path);
             }
             return value;
         }
         if (responseStatus == 403) {
-            logger.tracef("Forbidden to retrieve the secret from vault at path: %s", path);
-            throw new VaultException("Forbidden to retrieve secret at path: " + path);
+            ROOT_LOGGER.vaultForbiddenToRetrieveSecret(path);
+            throw new VaultException(ROOT_LOGGER.vaultForbiddenToRetrieveSecretAtPath(path));
         }
         if (responseStatus == 404) {
-            logger.tracef("Secret not found at path: %s", path);
+            ROOT_LOGGER.vaultSecretNotFoundAtPath(path);
             return null;
         }
 
-        throw new VaultException("Failed to retrieve secret from path: " + path + "/" + key + " (HTTP " + responseStatus + ")");
+        throw new VaultException(ROOT_LOGGER.vaultFailedToRetrieveSecretHttp(path, key, responseStatus));
     }
 
     /**
@@ -186,13 +185,13 @@ public class VaultConnector {
      */
     public void putSecret(String path, String key, String value) throws VaultException {
         if (path == null || path.trim().isEmpty()) {
-            throw new VaultException("Path cannot be null or empty");
+            throw new VaultException(ROOT_LOGGER.vaultPathCannotBeNullOrEmpty());
         }
         if (key == null || key.trim().isEmpty()) {
-            throw new VaultException("Key cannot be null or empty");
+            throw new VaultException(ROOT_LOGGER.vaultKeyCannotBeNullOrEmpty());
         }
         if (value == null) {
-            throw new VaultException("Value cannot be null");
+            throw new VaultException(ROOT_LOGGER.vaultValueCannotBeNull());
         }
 
         Map<String, Object> nameValuePairs = new HashMap<>();
@@ -210,14 +209,14 @@ public class VaultConnector {
         LogicalResponse response = this.vault.logical().write(path, nameValuePairs);
         int responseStatus = response.getRestResponse().getStatus();
         if (responseStatus == 200 || responseStatus == 204) {
-            logger.tracef("Vault stored secret successfully at path: %s, url: %s", path, this.vaultUrl);
+            ROOT_LOGGER.vaultStoredSecret(path, this.vaultUrl);
             return;
         }
         if (responseStatus == 403) {
-            throw new VaultException("Forbidden to store secret at path: " + path);
+            throw new VaultException(ROOT_LOGGER.vaultForbiddenToStoreSecretAtPath(path));
         }
 
-        throw new VaultException("Failed to store secret at path: " + path + "/" + key + " (HTTP " + responseStatus + ")");
+        throw new VaultException(ROOT_LOGGER.vaultFailedToStoreSecretHttp(path, key, responseStatus));
     }
 
     /**
@@ -225,10 +224,10 @@ public class VaultConnector {
      */
     public void removeSecret(String path, String key) throws VaultException {
         if (path == null || path.trim().isEmpty()) {
-            throw new VaultException("Path cannot be null or empty");
+            throw new VaultException(ROOT_LOGGER.vaultPathCannotBeNullOrEmpty());
         }
         if (key == null || key.trim().isEmpty()) {
-            throw new VaultException("Key cannot be null or empty");
+            throw new VaultException(ROOT_LOGGER.vaultKeyCannotBeNullOrEmpty());
         }
 
         // Read existing path to preserve other keys at the same path
@@ -243,7 +242,7 @@ public class VaultConnector {
         }
 
         if (!nameValuePairs.containsKey(key)) {
-            logger.tracef("Key %s does not exist at path %s", key, path);
+            ROOT_LOGGER.vaultKeyDoesNotExistAtPath(key, path);
             return;
         }
         nameValuePairs.remove(key);
@@ -251,25 +250,25 @@ public class VaultConnector {
             LogicalResponse deleteResponse = this.vault.logical().delete(path);
             int deleteStatus = deleteResponse.getRestResponse().getStatus();
             if (deleteStatus == 200 || deleteStatus == 204) {
-                logger.tracef("Vault deleted secret path successfully (no keys remaining): %s", path);
+                ROOT_LOGGER.vaultDeletedSecretPath(path);
                 return;
             }
             if (deleteStatus == 403) {
-                throw new VaultException("Forbidden to delete secret at path: " + path);
+                throw new VaultException(ROOT_LOGGER.vaultForbiddenToDeleteSecretAtPath(path));
             }
-            throw new VaultException("Failed to delete secret at path: " + path + " (HTTP " + deleteStatus + ")");
+            throw new VaultException(ROOT_LOGGER.vaultFailedToDeleteSecretHttp(path, deleteStatus));
         } else {
             // Write back the remaining keys
             LogicalResponse writeResponse = this.vault.logical().write(path, nameValuePairs);
             int writeStatus = writeResponse.getRestResponse().getStatus();
             if (writeStatus == 200 || writeStatus == 204) {
-                logger.tracef("Vault removed key %s from path %s successfully", key, path);
+                ROOT_LOGGER.vaultRemovedKeyFromPath(key, path);
                 return;
             }
             if (writeStatus == 403) {
-                throw new VaultException("Forbidden to update secret at path: " + path);
+                throw new VaultException(ROOT_LOGGER.vaultForbiddenToUpdateSecretAtPath(path));
             }
-            throw new VaultException("Failed to update secret at path: " + path + " after removing key " + key + " (HTTP " + writeStatus + ")");
+            throw new VaultException(ROOT_LOGGER.vaultFailedToUpdateSecretAfterRemoveKey(path, key, writeStatus));
         }
     }
 
@@ -286,9 +285,9 @@ public class VaultConnector {
             }
             return new HashSet<>();
         } else if (responseStatus == 404) {
-            throw new VaultException("Path does not exist or forbidden: \"" + path + "\"");
+            throw new VaultException(ROOT_LOGGER.vaultPathDoesNotExistOrForbidden(path));
         } else {
-            throw new VaultException("Failed to read aliases on path: \"" + path + "\"");
+            throw new VaultException(ROOT_LOGGER.vaultFailedToReadAliasesOnPath(path));
         }
     }
 
@@ -297,7 +296,7 @@ public class VaultConnector {
      */
     public Set<String> listAllItemsAtPath(String path) throws VaultException {
         if (path == null || path.trim().isEmpty()) {
-            throw new VaultException("Path cannot be null or empty");
+            throw new VaultException(ROOT_LOGGER.vaultPathCannotBeNullOrEmpty());
         }
         // vault expects trailing slash with list operation
         String listPath = path.endsWith("/") ? path : path + "/";
@@ -312,14 +311,14 @@ public class VaultConnector {
                 }
                 return new HashSet<>();
             } else if (responseStatus == 404) {
-                throw new VaultException("Path not found in vault: \"" + path + "\"");
+                throw new VaultException(ROOT_LOGGER.vaultPathNotFoundInVault(path));
             } else if (responseStatus == 403) {
-                throw new VaultException("Forbidden to list subpaths at path: \"" + path + "\"");
+                throw new VaultException(ROOT_LOGGER.vaultForbiddenToListSubpathsAtPath(path));
             } else {
-                throw new VaultException("Failed to list subpaths at path: \"" + path + "\" (HTTP " + responseStatus + ")");
+                throw new VaultException(ROOT_LOGGER.vaultFailedToListSubpathsHttp(path, responseStatus));
             }
         } catch (ClassCastException e) {
-            throw new VaultException("Unexpected response format when listing subpaths at path: \"" + path + "\": " + e.getMessage());
+            throw new VaultException(ROOT_LOGGER.vaultUnexpectedListSubpathsFormat(path, e.getMessage()));
         }
     }
 }

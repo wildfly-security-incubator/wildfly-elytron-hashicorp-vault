@@ -4,6 +4,8 @@
  */
 package org.wildfly.security.hashicorp.vault;
 
+import static org.wildfly.security.hashicorp.vault._private.HashiCorpVaultLogger.ROOT_LOGGER;
+
 import java.io.IOException;
 import java.security.Provider;
 import java.security.spec.AlgorithmParameterSpec;
@@ -40,13 +42,13 @@ public class VaultCredentialSource implements CredentialSource {
      */
     public VaultCredentialSource(VaultConnector vaultConnector, String secretPath, String secretKey) {
         if (vaultConnector == null) {
-            throw new IllegalArgumentException("VaultConnector cannot be null");
+            throw ROOT_LOGGER.vaultConnectorCannotBeNull();
         }
         if (secretPath == null || secretPath.trim().isEmpty()) {
-            throw new IllegalArgumentException("Secret path cannot be null or empty");
+            throw ROOT_LOGGER.vaultSecretPathInvalid();
         }
         if (secretKey == null || secretKey.trim().isEmpty()) {
-            throw new IllegalArgumentException("Secret key cannot be null or empty");
+            throw ROOT_LOGGER.vaultSecretKeyInvalid();
         }
         
         this.vaultConnector = vaultConnector;
@@ -76,7 +78,7 @@ public class VaultCredentialSource implements CredentialSource {
                     return credentialType.cast(new PasswordCredential(clearPassword));
                 }
             } catch (Exception e) {
-                throw new IOException("Failed to retrieve credential from Vault: " + e.getMessage(), e);
+                throw ROOT_LOGGER.failedToRetrieveCredentialFromVaultIo(e.getMessage(), e);
             }
         }
 

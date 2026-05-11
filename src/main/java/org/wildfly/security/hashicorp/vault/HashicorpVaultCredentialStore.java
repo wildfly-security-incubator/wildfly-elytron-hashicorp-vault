@@ -29,6 +29,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.wildfly.security.credential.store._private.ElytronMessages.log;
+import static org.wildfly.security.hashicorp.vault._private.HashiCorpVaultLogger.ROOT_LOGGER;
 
 /**
  * Credential store backed by Hashicorp Vault
@@ -56,16 +57,17 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
     /** In-memory LRU cache of retrieved credentials, keyed by credential alias (e.g. "path.key"). */
     private Map<String, Credential> credentialCache;
 
+
     @Override
     public void initialize(Map<String, String> attributes, CredentialStore.ProtectionParameter protectionParameter, Provider[] providers) throws CredentialStoreException {
         if (attributes == null) {
-            throw new CredentialStoreException("Attributes cannot be null");
+            throw ROOT_LOGGER.attributesCannotBeNull();
         }
         
         // Check required attributes
         this.hostAddress = attributes.get("host-address");
         if (this.hostAddress == null || this.hostAddress.trim().isEmpty()) {
-            throw new CredentialStoreException("host-address attribute is required");
+            throw ROOT_LOGGER.hostAddressRequired();
         }
 
         if (attributes.get("trust-store-path") != null) {
@@ -99,7 +101,7 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
             char[] password = getStorePassword(protectionParameter);
             String token = password != null ? String.valueOf(password) : null;
             if (token == null) {
-                throw new CredentialStoreException("Vault token is required");
+                throw ROOT_LOGGER.vaultTokenRequired();
             }
             
             SslConfig sslConfig = new SslConfig().verify(true);
@@ -117,7 +119,7 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
                         sslConfig.keyStore(keyStore, "");
                     }
                 } catch (Exception e) {
-                    throw new CredentialStoreException("Failed to load KeyStore from path: " + e.getMessage(), e);
+                    throw ROOT_LOGGER.failedToLoadKeyStore(e.getMessage(), e);
                 }
             }
             
@@ -133,7 +135,7 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
                         sslConfig.trustStore(trustStore);
                     }
                 } catch (Exception e) {
-                    throw new CredentialStoreException("Failed to load TrustStore from path: " + e.getMessage(), e);
+                    throw ROOT_LOGGER.failedToLoadTrustStore(e.getMessage(), e);
                 }
             }
 
@@ -142,9 +144,9 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
             
             initialized = true;
         } catch (IOException e) {
-            throw new CredentialStoreException("Failed to initialize vault credential store", e);
+            throw ROOT_LOGGER.failedToInitializeVaultCredentialStore(e);
         } catch (VaultException e) {
-            throw new CredentialStoreException("Failed to configure vault connection", e);
+            throw ROOT_LOGGER.failedToConfigureVaultConnection(e);
         }
     }
 
@@ -160,48 +162,48 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
     @Override
     public void store(String credentialAlias, Credential credential, CredentialStore.ProtectionParameter protectionParameter) throws CredentialStoreException, UnsupportedCredentialTypeException {
         if (!initialized) {
-            throw new CredentialStoreException("Credential store is not initialized");
+            throw ROOT_LOGGER.credentialStoreNotInitialized();
         }
         if (credentialAlias == null || credentialAlias.trim().isEmpty()) {
-            throw new CredentialStoreException("Credential alias has to be provided");
+            throw ROOT_LOGGER.credentialAliasRequired();
         }
         if (credential == null) {
-            throw new CredentialStoreException("Credential cannot be null");
+            throw ROOT_LOGGER.credentialCannotBeNull();
         }
         
         // Parse credentialAlias in format "path.key"
         String[] aliasSplit = credentialAlias.split("\\.");
         if (aliasSplit.length != 2) {
-            throw new CredentialStoreException("Credential alias must be in format 'path.key', got: " + credentialAlias);
+            throw ROOT_LOGGER.credentialAliasInvalidFormat(credentialAlias);
         }
         
         try {
             final char[] chars = credential.castAndApply(PasswordCredential.class, c -> c.getPassword().castAndApply(ClearPassword.class, ClearPassword::getPassword));
             if (chars == null) {
-                throw new CredentialStoreException("Failed to extract password from credential");
+                throw ROOT_LOGGER.failedToExtractPasswordFromCredential();
             }
             vaultConnector.putSecret(aliasSplit[0], aliasSplit[1], new String(chars));
             putInCredentialCache(credentialAlias, credential);
         } catch (VaultException e) {
-            throw new CredentialStoreException("Failed to store credential in vault", e);
+            throw ROOT_LOGGER.failedToStoreCredentialInVault(e);
         } catch (ClassCastException e) {
-            throw new UnsupportedCredentialTypeException("Only PasswordCredential with ClearPassword is supported", e);
+            throw ROOT_LOGGER.onlyPasswordCredentialWithClearPasswordSupported(e);
         }
     }
 
     @Override
     public <C extends Credential> C retrieve(String credentialAlias, Class<C> credentialType, String credentialAlgorithm, AlgorithmParameterSpec parameterSpec, CredentialStore.ProtectionParameter protectionParameter) throws CredentialStoreException {
         if (!initialized) {
-            throw new CredentialStoreException("Credential store is not initialized");
+            throw ROOT_LOGGER.credentialStoreNotInitialized();
         }
         if (credentialAlias == null || credentialAlias.trim().isEmpty()) {
-            throw new CredentialStoreException("Credential alias has to be provided");
+            throw ROOT_LOGGER.credentialAliasRequired();
         }
         
         // Parse credentialAlias in format "path.key"
         String[] aliasSplit = credentialAlias.split("\\.");
         if (aliasSplit.length != 2) {
-            throw new CredentialStoreException("Credential alias must be in format 'path.key', got: " + credentialAlias);
+            throw ROOT_LOGGER.credentialAliasInvalidFormat(credentialAlias);
         }
 
         Credential cached;
@@ -221,25 +223,25 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
             putInCredentialCache(credentialAlias, credential);
             return credentialType.cast(credential);
         } catch (IOException e) {
-            throw new CredentialStoreException("Failed to retrieve credential from vault", e);
+            throw ROOT_LOGGER.failedToRetrieveCredentialFromVault(e);
         } catch (ClassCastException e) {
-            throw new CredentialStoreException("Requested credential type is not supported: " + credentialType.getSimpleName(), e);
+            throw ROOT_LOGGER.unsupportedCredentialType(credentialType.getSimpleName(), e);
         }
     }
 
     @Override
     public void remove(String credentialAlias, Class<? extends Credential> credentialType, String credentialAlgorithm, AlgorithmParameterSpec parameterSpec) throws CredentialStoreException {
         if (!initialized) {
-            throw new CredentialStoreException("Credential store is not initialized");
+            throw ROOT_LOGGER.credentialStoreNotInitialized();
         }
         if (credentialAlias == null || credentialAlias.trim().isEmpty()) {
-            throw new CredentialStoreException("Credential alias has to be provided");
+            throw ROOT_LOGGER.credentialAliasRequired();
         }
         
         // Parse credentialAlias in format "path.key"
         String[] aliasSplit = credentialAlias.split("\\.");
         if (aliasSplit.length != 2) {
-            throw new CredentialStoreException("Credential alias must be in format 'path.key', got: " + credentialAlias);
+            throw ROOT_LOGGER.credentialAliasInvalidFormat(credentialAlias);
         }
         
         try {
@@ -249,7 +251,7 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
                 credentialCache.keySet().removeIf(k -> k.equals(credentialAlias) || k.startsWith(aliasSplit[0] + "."));
             }
         } catch (VaultException e) {
-            throw new CredentialStoreException("Failed to remove credential from vault", e);
+            throw ROOT_LOGGER.failedToRemoveCredentialFromVault(e);
         }
     }
 
@@ -288,10 +290,10 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
      */
     public Set<String> getAliases(String path) throws CredentialStoreException {
         if (!initialized) {
-            throw new CredentialStoreException("Credential store is not initialized");
+            throw ROOT_LOGGER.credentialStoreNotInitialized();
         }
         if (path == null || path.trim().isEmpty()) {
-            throw new CredentialStoreException("Empty or null path provided to getAliases operation");
+            throw ROOT_LOGGER.emptyPathForGetAliases();
         }
         return collectAliases(normalizePath(path), false, 0);
     }
@@ -306,10 +308,10 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
      */
     public Set<String> getAliases(String path, boolean recursive) throws CredentialStoreException {
         if (!initialized) {
-            throw new CredentialStoreException("Credential store is not initialized");
+            throw ROOT_LOGGER.credentialStoreNotInitialized();
         }
         if (path == null || path.trim().isEmpty()) {
-            throw new CredentialStoreException("Empty or null path provided to getAliases operation");
+            throw ROOT_LOGGER.emptyPathForGetAliases();
         }
         return collectAliases(normalizePath(path), recursive, DEFAULT_MAX_DEPTH);
     }
@@ -326,13 +328,13 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
      */
     public Set<String> getAliases(String path, boolean recursive, int recursiveDepth) throws CredentialStoreException {
         if (!initialized) {
-            throw new CredentialStoreException("Credential store is not initialized");
+            throw ROOT_LOGGER.credentialStoreNotInitialized();
         }
         if (path == null || path.trim().isEmpty()) {
-            throw new CredentialStoreException("Empty or null path provided to getAliases operation");
+            throw ROOT_LOGGER.emptyPathForGetAliases();
         }
         if (recursiveDepth < 0) {
-            throw new CredentialStoreException("recursive-depth must be non-negative, got: " + recursiveDepth);
+            throw ROOT_LOGGER.recursiveDepthMustBeNonNegative(recursiveDepth);
         }
         return collectAliases(normalizePath(path), recursive, recursiveDepth);
     }
@@ -350,16 +352,16 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
      */
     public Set<String> getAliases(String path, boolean recursive, int recursiveDepth, int maxNumberOfAliases) throws CredentialStoreException {
         if (!initialized) {
-            throw new CredentialStoreException("Credential store is not initialized");
+            throw ROOT_LOGGER.credentialStoreNotInitialized();
         }
         if (path == null || path.trim().isEmpty()) {
-            throw new CredentialStoreException("Empty or null path provided to getAliases operation");
+            throw ROOT_LOGGER.emptyPathForGetAliases();
         }
         if (recursiveDepth < 0) {
-            throw new CredentialStoreException("recursive-depth must be non-negative, got: " + recursiveDepth);
+            throw ROOT_LOGGER.recursiveDepthMustBeNonNegative(recursiveDepth);
         }
         if (maxNumberOfAliases <= 0) {
-            throw new CredentialStoreException("maxNumberOfAliases must be positive, got: " + maxNumberOfAliases);
+            throw ROOT_LOGGER.maxNumberOfAliasesMustBePositive(maxNumberOfAliases);
         }
         return collectAliases(normalizePath(path), recursive, recursiveDepth, maxNumberOfAliases);
     }
@@ -430,10 +432,10 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
                 aliases.add(path + "." + key);
             }
         } catch (VaultException e) {
-            if (e.getMessage().contains("Path does not exist")) {
+            if (e.getMessage() != null && e.getMessage().contains("Path does not exist")) {
                 // ignore because this path in the tree can be empty, but other paths not so continue traversal
             } else {
-                throw new CredentialStoreException("Could not read keys from path \"" + path + "\" (currentDepth=" + currentDepth + ", recursive=" + recursive + "), message is: " + e.getMessage(), e);
+                throw ROOT_LOGGER.couldNotReadKeysFromPath(path, currentDepth, recursive, e.getMessage(), e);
             }
         }
 
@@ -468,7 +470,7 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
             } catch (VaultException e) {
                 String errorMsg = e.getMessage();
                 if (errorMsg != null && errorMsg.contains("403")) {
-                    throw new CredentialStoreException("Forbidden to list subpaths at path \"" + path + "\"", e);
+                    throw ROOT_LOGGER.forbiddenToListSubpathsAtCredentialStorePath(path, e);
                 }
             }
         }

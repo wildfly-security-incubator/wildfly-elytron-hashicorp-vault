@@ -4,6 +4,8 @@
  */
 package org.wildfly.security.hashicorp.vault.loginstrategy;
 
+import static org.wildfly.security.hashicorp.vault._private.HashiCorpVaultLogger.ROOT_LOGGER;
+
 import io.github.jopenlibs.vault.VaultException;
 
 /**
@@ -15,7 +17,7 @@ public class TokenLoginStrategy implements VaultLoginStrategy {
     @Override
     public String tryLogin(LoginContext context) throws VaultException {
         if (context.getToken() == null || context.getToken().trim().isEmpty()) {
-            throw new VaultException("Token is null, cannot login with token");
+            throw new VaultException(ROOT_LOGGER.vaultTokenNullCannotLogin());
         }
         return context.getToken();
     }
