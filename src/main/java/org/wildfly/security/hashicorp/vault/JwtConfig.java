@@ -4,6 +4,8 @@
  */
 package org.wildfly.security.hashicorp.vault;
 
+import static org.wildfly.security.hashicorp.vault._private.HashiCorpVaultLogger.ROOT_LOGGER;
+
 import org.wildfly.common.annotation.NotNull;
 
 /**
@@ -35,7 +37,7 @@ public final class JwtConfig {
 
     private String checkRequired(String value) throws IllegalArgumentException {
         if (value == null || value.trim().isEmpty()) {
-            throw new IllegalArgumentException("Missing required property!");
+            throw ROOT_LOGGER.jwtMissingRequiredProperty();
         }
         return value;
     }
